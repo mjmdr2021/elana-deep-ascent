@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://ranged_enemy.tscn" id="1_ranged"]
+[ext_resource type="Script" path="res://seed_mortar.gd" id="2_seed_mortar"]
+
+[node name="SeedMortar" instance=ExtResource("1_ranged")]
+script = ExtResource("2_seed_mortar")
+max_hp = 25
+defense = 5
+fire_rate = 4.0
+xp_reward = 12

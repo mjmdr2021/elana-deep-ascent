@@ -1,0 +1,32 @@
+[gd_scene format=3 uid="uid://cjj5k57lefs6e"]
+
+[ext_resource type="Script" uid="uid://v7wi7egc2wx7" path="res://training_dummy.gd" id="1_tdscr"]
+[ext_resource type="Texture2D" uid="uid://pss4wgopk86j" path="res://enemy1-idle1.png" id="2_a3bbp"]
+[ext_resource type="Texture2D" uid="uid://cxtxvvid7lbmj" path="res://enemy1-idle2.png" id="3_yb3ki"]
+[ext_resource type="Texture2D" uid="uid://ciu0lp1ewujed" path="res://enemy1-idle3.png" id="4_6j7um"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_3nmyp"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_a3bbp")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_yb3ki")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_6j7um")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 4.0
+}]
+
+[node name="TrainingDummy" type="CharacterBody2D" unique_id=613655808]
+script = ExtResource("1_tdscr")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1781074574]
+position = Vector2(8, -8)
+sprite_frames = SubResource("SpriteFrames_3nmyp")
+animation = &"idle"
+offset = Vector2(-8, -8)

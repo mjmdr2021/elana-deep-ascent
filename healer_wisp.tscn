@@ -1,0 +1,12 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://flying_enemy.tscn" id="1_flying"]
+[ext_resource type="Script" path="res://healer_wisp.gd" id="2_healer_wisp"]
+
+[node name="HealerWisp" instance=ExtResource("1_flying")]
+script = ExtResource("2_healer_wisp")
+max_hp = 15
+defense = 0
+attack_damage = 0
+xp_reward = 10
+modulate = Color(0.5, 1.0, 0.6, 1)

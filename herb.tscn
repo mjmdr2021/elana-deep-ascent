@@ -1,0 +1,50 @@
+[gd_scene format=3 uid="uid://ckln8o7viiodj"]
+
+[ext_resource type="Script" uid="uid://bsmopg2mq363i" path="res://herb.gd" id="1_q66yg"]
+[ext_resource type="Texture2D" uid="uid://b3sfflx34t3li" path="res://herb1.png" id="2_pa2er"]
+[ext_resource type="Texture2D" uid="uid://b3i7gvg1klidy" path="res://herb2.png" id="3_hr2dm"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_arrdh"]
+radius = 8.0
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_nu2n0"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_pa2er")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_hr2dm")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 4.0
+}]
+
+[node name="Herb" type="Area2D" unique_id=1161600847]
+collision_layer = 0
+collision_mask = 2
+script = ExtResource("1_q66yg")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=151094600]
+shape = SubResource("CircleShape2D_arrdh")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=352589422]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -8.0
+offset_top = -8.0
+offset_right = 8.0
+offset_bottom = 8.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0.63913876, 0.22529972, 1)
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1664374579]
+sprite_frames = SubResource("SpriteFrames_nu2n0")
+animation = &"idle"
+frame_progress = 0.65423787

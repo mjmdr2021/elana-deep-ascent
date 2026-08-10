@@ -1,0 +1,14 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://enemy.tscn" id="1_enemy"]
+[ext_resource type="Script" path="res://snap_vine.gd" id="2_snap_vine"]
+
+[node name="SnapVine" instance=ExtResource("1_enemy")]
+script = ExtResource("2_snap_vine")
+enemy_type = 1
+max_hp = 25
+defense = 10
+attack_damage = 10
+attack_cooldown_time = 1.2
+attack_windup_time = 0.15
+xp_reward = 8

@@ -1,0 +1,29 @@
+[gd_scene format=3 uid="uid://junb5rav6t0j"]
+
+[ext_resource type="Script" uid="uid://b7epgr6bv2t5b" path="res://death_zone.gd" id="1_8ryga"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_3vbl4"]
+size = Vector2(40, 10)
+
+[node name="Lava" type="Area2D" unique_id=2074766244]
+collision_layer = 0
+collision_mask = 2
+script = ExtResource("1_8ryga")
+lethal = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1475587644]
+shape = SubResource("RectangleShape2D_3vbl4")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=1825923944]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -5.0
+offset_right = 20.0
+offset_bottom = 5.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.35108024, 0.0025652247, 0.10469245, 1)

@@ -1,0 +1,42 @@
+[gd_scene format=3 uid="uid://cs5h1a00s4kh3"]
+
+[ext_resource type="Script" uid="uid://deaieb7ieyl4i" path="res://ore_piece.gd" id="1_d1ka3"]
+[ext_resource type="Texture2D" uid="uid://d2d3y22q6dol4" path="res://ore-piece.png" id="2_64mq0"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_64mq0"]
+size = Vector2(12, 12)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_d1ka3"]
+size = Vector2(32, 32)
+
+[node name="OrePiece" type="RigidBody2D" unique_id=1195486349]
+collision_layer = 4
+script = ExtResource("1_d1ka3")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=443051999]
+shape = SubResource("RectangleShape2D_64mq0")
+
+[node name="PickupArea" type="Area2D" parent="." unique_id=1048983263]
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="PickupArea" unique_id=562126228]
+shape = SubResource("RectangleShape2D_d1ka3")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=1650147582]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -6.0
+offset_top = -6.0
+offset_right = 6.0
+offset_bottom = 6.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.5086761, 0.44342571, 0.45657682, 1)
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=2041593606]
+texture = ExtResource("2_64mq0")

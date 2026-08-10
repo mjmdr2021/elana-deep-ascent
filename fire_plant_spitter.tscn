@@ -1,0 +1,13 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://ranged_enemy.tscn" id="1_ranged"]
+[ext_resource type="Script" path="res://fire_plant_spitter.gd" id="2_fire_plant_spitter"]
+
+[node name="FirePlantSpitter" instance=ExtResource("1_ranged")]
+script = ExtResource("2_fire_plant_spitter")
+max_hp = 28
+defense = 5
+fire_rate = 2.5
+xp_reward = 12
+fire_resist = 0.25
+frost_resist = 2.0

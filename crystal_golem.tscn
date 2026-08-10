@@ -1,0 +1,15 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://enemy.tscn" id="1_enemy"]
+
+[node name="CrystalGolem" instance=ExtResource("1_enemy")]
+max_hp = 65
+defense = 15
+speed = 20.0
+chase_speed = 32.0
+attack_damage = 12
+xp_reward = 26
+modulate = Color(0.6, 0.85, 1.0, 1)
+fire_resist = 0.0
+frost_resist = 0.0
+elec_resist = 0.0

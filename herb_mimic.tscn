@@ -1,0 +1,13 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://enemy.tscn" id="1_enemy"]
+[ext_resource type="Script" path="res://herb_mimic.gd" id="2_herb_mimic"]
+
+[node name="HerbMimic" instance=ExtResource("1_enemy")]
+script = ExtResource("2_herb_mimic")
+max_hp = 20
+defense = 0
+speed = 25.0
+chase_speed = 45.0
+attack_damage = 8
+xp_reward = 10

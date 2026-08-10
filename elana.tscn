@@ -1,0 +1,268 @@
+[gd_scene format=3 uid="uid://f8neia0maecx"]
+
+[ext_resource type="Script" uid="uid://ceyiumq81y31d" path="res://elana.gd" id="1_0euge"]
+[ext_resource type="PackedScene" uid="uid://c3jdl88ajdxym" path="res://glint.tscn" id="2_1b2v3"]
+[ext_resource type="Texture2D" uid="uid://pgc1wc8vdx7b" path="res://elana_Sprites/attack_claw1.png" id="2_b4hkx"]
+[ext_resource type="Texture2D" uid="uid://bm64ha8sobn0u" path="res://elana_Sprites/attack_claw2.png" id="3_wifl5"]
+[ext_resource type="Texture2D" uid="uid://cdtmqcva3ir0" path="res://elana_Sprites/attack_fist1.png" id="4_j8hhu"]
+[ext_resource type="Texture2D" uid="uid://cgsvhnnlutgs2" path="res://elana_Sprites/attack_fist2.png" id="5_5gcnd"]
+[ext_resource type="Texture2D" uid="uid://dixf8sdqkko5p" path="res://elana_Sprites/attack_hammer1.png" id="6_ajak7"]
+[ext_resource type="Texture2D" uid="uid://dp5egpgf2viey" path="res://elana_Sprites/attack_hammer2.png" id="7_sya16"]
+[ext_resource type="Texture2D" uid="uid://bycdqve8fr8vv" path="res://elana_Sprites/attack_hammer3.png" id="8_ryct3"]
+[ext_resource type="Texture2D" uid="uid://cqtkn7anf8egr" path="res://elana_Sprites/attack_hammer4.png" id="9_rdlca"]
+[ext_resource type="Texture2D" uid="uid://cwbd1jkwdp2xh" path="res://elana_Sprites/attack_hammer5.png" id="10_d5rwv"]
+[ext_resource type="Texture2D" uid="uid://cqo3mjsckbckq" path="res://elana_Sprites/attack_hammer6.png" id="11_gm8y3"]
+[ext_resource type="Texture2D" uid="uid://btuvc7qi38udc" path="res://elana_Sprites/attack_hammer7.png" id="12_oabsu"]
+[ext_resource type="Texture2D" uid="uid://3jgjrf1cphd5" path="res://elana_Sprites/attack_hammer8.png" id="13_x7hr4"]
+[ext_resource type="Texture2D" uid="uid://bnig2afwu77nl" path="res://elana_Sprites/attack_hammer9.png" id="14_ndy6i"]
+[ext_resource type="Texture2D" uid="uid://cpclr17ilccct" path="res://elana_Sprites/attack_hammer10.png" id="15_lcvc0"]
+[ext_resource type="Texture2D" uid="uid://lrwdiak5orr1" path="res://elana_Sprites/attack_spear1.png" id="16_es7p5"]
+[ext_resource type="Texture2D" uid="uid://brefv8shc6skf" path="res://elana_Sprites/attack_spear2.png" id="17_r5gis"]
+[ext_resource type="Texture2D" uid="uid://qivwjwwko00y" path="res://elana_Sprites/attack_sword1.png" id="18_c7ank"]
+[ext_resource type="Texture2D" uid="uid://dje61v7tddppf" path="res://elana_Sprites/attack_sword2.png" id="19_wsmqy"]
+[ext_resource type="Texture2D" uid="uid://j17c7as8um3c" path="res://elana_Sprites/idle_claw1.png" id="20_1wu3x"]
+[ext_resource type="Texture2D" uid="uid://bdeljhsyb4xl1" path="res://elana_Sprites/idle_claw2.png" id="21_mlbd7"]
+[ext_resource type="Texture2D" uid="uid://b72nbd16kk3es" path="res://elana_Sprites/idle_fist1.png" id="22_m7uae"]
+[ext_resource type="Texture2D" uid="uid://corhr73mkvdkt" path="res://elana_Sprites/idle_fist2.png" id="23_bfxde"]
+[ext_resource type="Texture2D" uid="uid://3bffqnhhphjm" path="res://elana_Sprites/idle_hammer1.png" id="24_o2jdl"]
+[ext_resource type="Texture2D" uid="uid://ds07exgdg5n04" path="res://elana_Sprites/idle_hammer2.png" id="25_3mxhk"]
+[ext_resource type="Texture2D" uid="uid://ot5t3xvph2" path="res://elana_Sprites/normal_idle-1.png" id="25_oabsu"]
+[ext_resource type="Texture2D" uid="uid://ch2w5n6tyt755" path="res://elana_Sprites/idle_spear1.png" id="26_7ha62"]
+[ext_resource type="Texture2D" uid="uid://cuuukkbj6q1hf" path="res://elana_Sprites/normal_idle-2.png" id="26_x7hr4"]
+[ext_resource type="Texture2D" uid="uid://btjjom64mjwvx" path="res://elana_Sprites/idle_spear2.png" id="27_0sqsw"]
+[ext_resource type="Texture2D" uid="uid://df1jwfog784eu" path="res://elana_Sprites/idle_sword1.png" id="28_om7v6"]
+[ext_resource type="Texture2D" uid="uid://bbdu4m1o2fwj" path="res://elana_Sprites/idle_sword2.png" id="29_b5vgp"]
+[ext_resource type="Texture2D" uid="uid://d4bjrexhbsfby" path="res://elana_Sprites/walk_normal1.png" id="32_ndy6i"]
+[ext_resource type="Texture2D" uid="uid://c6rbyxajdmiwy" path="res://elana_Sprites/walk_normal2.png" id="33_lcvc0"]
+[ext_resource type="Texture2D" uid="uid://j4lbry266h0d" path="res://elana_Sprites/walk_normal3.png" id="34_es7p5"]
+[ext_resource type="Texture2D" uid="uid://ckj62x4vd27yw" path="res://elana_Sprites/walk_normal4.png" id="35_r5gis"]
+[ext_resource type="Texture2D" uid="uid://fwvhtv3lbg1g" path="res://elana_Sprites/walk_normal5.png" id="36_c7ank"]
+[ext_resource type="Texture2D" uid="uid://chdo3ovqo5xfr" path="res://elana_Sprites/walk_normal6.png" id="37_wsmqy"]
+[ext_resource type="Texture2D" uid="uid://bsgcel4spcst6" path="res://elana_Sprites/walk_normal7.png" id="38_1wu3x"]
+[ext_resource type="Texture2D" uid="uid://2j7fqwxewcq6" path="res://elana_Sprites/walk_normal8.png" id="39_mlbd7"]
+[ext_resource type="Texture2D" uid="uid://be4tyn2chkf4x" path="res://elana_Sprites/walk_normal9.png" id="40_m7uae"]
+[ext_resource type="Texture2D" uid="uid://b8vakfn0l4wca" path="res://elana_Sprites/walk_normal10.png" id="41_bfxde"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_arrdh"]
+size = Vector2(13, 23)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_ixsaw"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_b4hkx")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_wifl5")
+}],
+"loop": false,
+"name": &"attack_chain_claw",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("4_j8hhu")
+}],
+"loop": false,
+"name": &"attack_fist",
+"speed": 1.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("5_5gcnd")
+}],
+"loop": true,
+"name": &"attack_fist2",
+"speed": 1.0
+}, {
+"frames": [{
+"duration": 2.5,
+"texture": ExtResource("16_es7p5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("17_r5gis")
+}],
+"loop": false,
+"name": &"attack_spear",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("18_c7ank")
+}, {
+"duration": 2.0,
+"texture": ExtResource("19_wsmqy")
+}],
+"loop": false,
+"name": &"attack_sword",
+"speed": 8.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("6_ajak7")
+}, {
+"duration": 1.5,
+"texture": ExtResource("7_sya16")
+}, {
+"duration": 1.0,
+"texture": ExtResource("8_ryct3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("9_rdlca")
+}, {
+"duration": 1.0,
+"texture": ExtResource("10_d5rwv")
+}, {
+"duration": 1.5,
+"texture": ExtResource("11_gm8y3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("12_oabsu")
+}, {
+"duration": 1.0,
+"texture": ExtResource("13_x7hr4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("14_ndy6i")
+}, {
+"duration": 1.0,
+"texture": ExtResource("15_lcvc0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("25_3mxhk")
+}],
+"loop": false,
+"name": &"attack_warhammer",
+"speed": 8.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("20_1wu3x")
+}, {
+"duration": 1.0,
+"texture": ExtResource("21_mlbd7")
+}],
+"loop": true,
+"name": &"idle_chain_claw",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("22_m7uae")
+}, {
+"duration": 1.0,
+"texture": ExtResource("23_bfxde")
+}],
+"loop": true,
+"name": &"idle_fist",
+"speed": 1.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("25_oabsu")
+}, {
+"duration": 1.0,
+"texture": ExtResource("26_x7hr4")
+}],
+"loop": true,
+"name": &"idle_normal",
+"speed": 1.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("26_7ha62")
+}, {
+"duration": 1.0,
+"texture": ExtResource("27_0sqsw")
+}],
+"loop": true,
+"name": &"idle_spear",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("28_om7v6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("29_b5vgp")
+}],
+"loop": true,
+"name": &"idle_sword",
+"speed": 1.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("24_o2jdl")
+}, {
+"duration": 1.0,
+"texture": ExtResource("25_3mxhk")
+}],
+"loop": true,
+"name": &"idle_warhammer",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("32_ndy6i")
+}, {
+"duration": 1.0,
+"texture": ExtResource("33_lcvc0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("34_es7p5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("35_r5gis")
+}, {
+"duration": 1.0,
+"texture": ExtResource("36_c7ank")
+}, {
+"duration": 1.0,
+"texture": ExtResource("37_wsmqy")
+}, {
+"duration": 1.0,
+"texture": ExtResource("38_1wu3x")
+}, {
+"duration": 1.0,
+"texture": ExtResource("39_mlbd7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("40_m7uae")
+}, {
+"duration": 1.0,
+"texture": ExtResource("41_bfxde")
+}],
+"loop": true,
+"name": &"walk",
+"speed": 27.0
+}]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_0euge"]
+size = Vector2(16, 24)
+
+[node name="Elana" type="CharacterBody2D" unique_id=1809535023 groups=["player"]]
+collision_layer = 2
+script = ExtResource("1_0euge")
+flip_offset_x = -16.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1470965816]
+shape = SubResource("RectangleShape2D_arrdh")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=2104957569]
+position = Vector2(8, 0)
+sprite_frames = SubResource("SpriteFrames_ixsaw")
+animation = &"walk"
+
+[node name="Hitbox" type="Area2D" parent="." unique_id=2097272207]
+collision_layer = 8
+collision_mask = 4
+monitoring = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hitbox" unique_id=759598906]
+position = Vector2(8, 0)
+shape = SubResource("RectangleShape2D_0euge")
+
+[node name="Camera" type="Camera2D" parent="." unique_id=689576154]
+zoom = Vector2(4, 4)
+
+[node name="Glint" parent="." unique_id=1900686621 instance=ExtResource("2_1b2v3")]

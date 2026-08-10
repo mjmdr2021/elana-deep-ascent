@@ -1,0 +1,40 @@
+[gd_scene format=3 uid="uid://bc2u1psdp8tnq"]
+
+[ext_resource type="Script" uid="uid://banckqopiojqr" path="res://herb_respawn_point.gd" id="1_4s355"]
+[ext_resource type="Texture2D" uid="uid://dth2qs5nulk1g" path="res://herb-respawn.png" id="2_wgnhc"]
+[ext_resource type="Script" path="res://proximity_visibility.gd" id="3_pv"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_wgnhc"]
+size = Vector2(16, 24)
+
+[node name="HerbRespawnPoint" type="Area2D" unique_id=182203410]
+collision_layer = 0
+collision_mask = 2
+script = ExtResource("1_4s355")
+herb_type = 4
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1662070983]
+shape = SubResource("RectangleShape2D_wgnhc")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=624092171]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -8.0
+offset_top = -12.0
+offset_right = 8.0
+offset_bottom = 12.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.3254902, 1, 0.34901962, 1)
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=301660991]
+position = Vector2(-40, -28)
+texture = ExtResource("2_wgnhc")
+offset = Vector2(40, 16)
+
+[node name="ProximityVisibility" type="Node" parent="."]
+script = ExtResource("3_pv")

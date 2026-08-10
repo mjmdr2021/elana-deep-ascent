@@ -1,0 +1,16 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://enemy.tscn" id="1_enemy"]
+[ext_resource type="Script" path="res://splitter.gd" id="2_splitter"]
+
+[node name="Splitter" instance=ExtResource("1_enemy")]
+script = ExtResource("2_splitter")
+max_hp = 18
+defense = 0
+speed = 15.0
+chase_speed = 25.0
+attack_damage = 6
+xp_reward = 8
+modulate = Color(0.4, 0.85, 0.35, 1)
+fire_resist = 0.25
+frost_resist = 2.0

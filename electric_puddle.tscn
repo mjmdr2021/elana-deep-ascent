@@ -1,0 +1,28 @@
+[gd_scene format=3 uid="uid://dx0fq1g2mx03e"]
+
+[ext_resource type="Script" uid="uid://cy07qyu43cyh5" path="res://electric_puddle.gd" id="1_teukx"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_oouwx"]
+size = Vector2(15, 2)
+
+[node name="ElectricPuddle" type="Area2D" unique_id=954049695]
+collision_layer = 0
+collision_mask = 2
+script = ExtResource("1_teukx")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=97467110]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -7.5
+offset_top = -1.0
+offset_right = 7.5
+offset_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+metadata/_edit_use_anchors_ = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=274980817]
+shape = SubResource("RectangleShape2D_oouwx")

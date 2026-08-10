@@ -1,0 +1,14 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://enemy.tscn" id="1_enemy"]
+[ext_resource type="Script" path="res://burrower.gd" id="2_burrower"]
+
+[node name="Burrower" instance=ExtResource("1_enemy")]
+script = ExtResource("2_burrower")
+max_hp = 22
+defense = 5
+speed = 25.0
+chase_speed = 40.0
+attack_damage = 10
+xp_reward = 16
+modulate = Color(0.75, 0.6, 0.35, 1)

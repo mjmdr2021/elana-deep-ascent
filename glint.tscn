@@ -1,0 +1,33 @@
+[gd_scene format=3 uid="uid://c3jdl88ajdxym"]
+
+[ext_resource type="Script" uid="uid://cllrotqflnjjl" path="res://glint.gd" id="1_w3rh4"]
+[ext_resource type="Texture2D" uid="uid://cifg0l3lvmmjl" path="res://glint.png" id="2_dwff3"]
+
+[sub_resource type="Gradient" id="Gradient_h5x4l"]
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_w3rh4"]
+gradient = SubResource("Gradient_h5x4l")
+width = 128
+height = 128
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[node name="Glint" type="Node2D" unique_id=1900686621]
+script = ExtResource("1_w3rh4")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1074048208]
+texture = ExtResource("2_dwff3")
+
+[node name="Light" type="PointLight2D" parent="." unique_id=1560589701]
+texture = SubResource("GradientTexture2D_w3rh4")
+texture_scale = 2.0
+
+[node name="HerbGlow" type="PointLight2D" parent="." unique_id=2231908845]
+texture = SubResource("GradientTexture2D_w3rh4")
+texture_scale = 0.45
+energy = 0.0
+
+[node name="ScoutCamera" type="Camera2D" parent="." unique_id=3348217659]
+zoom = Vector2(4, 4)

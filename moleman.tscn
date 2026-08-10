@@ -1,0 +1,54 @@
+[gd_scene format=3 uid="uid://q3b4pcnh4fva"]
+
+[ext_resource type="Script" uid="uid://dibagsb8yr1qx" path="res://moleman.gd" id="1_moleman"]
+[ext_resource type="Texture2D" uid="uid://bdm1yjvlhsy25" path="res://moleman1.png" id="8_0qctx"]
+[ext_resource type="Texture2D" uid="uid://dnnbsbf8lgtgw" path="res://moleman2.png" id="9_iyg7c"]
+[ext_resource type="Script" path="res://proximity_visibility.gd" id="10_pv"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_ak1cg"]
+size = Vector2(24, 24)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_8me44"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("8_0qctx")
+}, {
+"duration": 1.0,
+"texture": ExtResource("9_iyg7c")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 4.0
+}]
+
+[node name="Moleman" type="Area2D" unique_id=43360760]
+collision_layer = 0
+collision_mask = 2
+input_pickable = false
+script = ExtResource("1_moleman")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=702932702]
+shape = SubResource("RectangleShape2D_ak1cg")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=1889062816]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -8.0
+offset_top = -12.0
+offset_right = 8.0
+offset_bottom = 12.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.42782006, 0.23959714, 0.037257195, 1)
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1807477460]
+sprite_frames = SubResource("SpriteFrames_8me44")
+animation = &"idle"
+
+[node name="ProximityVisibility" type="Node" parent="."]
+script = ExtResource("10_pv")

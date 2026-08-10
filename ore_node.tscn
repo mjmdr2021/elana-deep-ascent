@@ -1,0 +1,40 @@
+[gd_scene format=3 uid="uid://6d4hy8iotgv"]
+
+[ext_resource type="Script" uid="uid://g2gqp2gh60jn" path="res://ore_node.gd" id="1_on8wq"]
+[ext_resource type="Texture2D" uid="uid://bx18xhtpkupj8" path="res://ore-node.png" id="2_uni3r"]
+[ext_resource type="Script" path="res://proximity_visibility.gd" id="3_pv"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_02wh1"]
+size = Vector2(16, 32)
+
+[node name="OreNode" type="StaticBody2D" unique_id=681495780]
+script = ExtResource("1_on8wq")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=1262605071]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -8.0
+offset_top = -16.0
+offset_right = 8.0
+offset_bottom = 16.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.3810519, 0.33537835, 0.33701023, 1)
+
+[node name="Hurtbox" type="Area2D" parent="." unique_id=1450499107]
+collision_layer = 4
+collision_mask = 8
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox" unique_id=908782406]
+shape = SubResource("RectangleShape2D_02wh1")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1529151555]
+position = Vector2(0, 4)
+texture = ExtResource("2_uni3r")
+
+[node name="ProximityVisibility" type="Node" parent="."]
+script = ExtResource("3_pv")

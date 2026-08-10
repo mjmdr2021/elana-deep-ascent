@@ -1,0 +1,42 @@
+[gd_scene format=3 uid="uid://dxfo8p6a88klw"]
+
+[sub_resource type="GDScript" id="GDScript_uuwdf"]
+script/source = "extends Area2D
+
+func _process(_delta):
+	var elana = get_tree().get_first_node_in_group(\"player\")
+	if elana == null or not (\"on_slippery_tile\" in elana):
+		return
+	var inside = false
+	for body in get_overlapping_bodies():
+		if body == elana:
+			inside = true
+			break
+	elana.on_slippery_tile = inside
+"
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_ndvii"]
+size = Vector2(16, 17)
+
+[node name="slipperyTile" type="Area2D" unique_id=954049695]
+collision_layer = 0
+collision_mask = 2
+script = SubResource("GDScript_uuwdf")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=97467110]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -8.0
+offset_top = -8.5
+offset_right = 8.0
+offset_bottom = 8.5
+grow_horizontal = 2
+grow_vertical = 2
+metadata/_edit_use_anchors_ = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=274980817]
+position = Vector2(0, 0.5)
+shape = SubResource("RectangleShape2D_ndvii")

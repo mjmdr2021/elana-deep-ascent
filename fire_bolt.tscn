@@ -1,0 +1,26 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://fire_bolt.gd" id="1_fire_bolt"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_firebolt"]
+size = Vector2(6, 6)
+
+[node name="FireBolt" type="Area2D"]
+script = ExtResource("1_fire_bolt")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -3.0
+offset_top = -3.0
+offset_right = 3.0
+offset_bottom = 3.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(1.0, 0.4, 0.1, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_firebolt")

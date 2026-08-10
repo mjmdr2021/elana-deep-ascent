@@ -1,0 +1,9 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Exported builds — rebuildable from source via Godot's export feature,
+# not meant to be version-controlled (the .exe alone is ~96MB).
+*.exe
+*.pck
+*.console.exe

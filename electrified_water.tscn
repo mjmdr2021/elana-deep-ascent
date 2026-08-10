@@ -1,0 +1,27 @@
+[gd_scene format=3 uid="uid://bqknevdjbd22d"]
+
+[ext_resource type="Script" uid="uid://b7epgr6bv2t5b" path="res://death_zone.gd" id="1_cc78f"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_mgp4h"]
+size = Vector2(100, 10)
+
+[node name="ElectricfiedWater" type="Area2D" unique_id=2074766244]
+collision_layer = 0
+collision_mask = 2
+script = ExtResource("1_cc78f")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1475587644]
+shape = SubResource("RectangleShape2D_mgp4h")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=1768096062]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -50.0
+offset_top = -5.0
+offset_right = 50.0
+offset_bottom = 5.0
+grow_horizontal = 2
+grow_vertical = 2

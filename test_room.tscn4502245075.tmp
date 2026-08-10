@@ -1,0 +1,140 @@
+[gd_scene format=3 uid="uid://dotl8tuaervn1"]
+
+[ext_resource type="Script" uid="uid://ceyiumq81y31d" path="res://elana.gd" id="1_aiegb"]
+[ext_resource type="Script" uid="uid://bsmopg2mq363i" path="res://herb.gd" id="2_oqbmf"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_oqbmf"]
+size = Vector2(800, 32)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_arrdh"]
+size = Vector2(32, 64)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_arrdh"]
+radius = 8.0
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_ju58f"]
+size = Vector2(16, 32)
+
+[node name="Node2D" type="Node2D" unique_id=1638761778]
+
+[node name="StaticBody2D" type="StaticBody2D" parent="." unique_id=1200653243]
+position = Vector2(424, 335)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="StaticBody2D" unique_id=487544463]
+shape = SubResource("RectangleShape2D_oqbmf")
+
+[node name="ColorRect" type="ColorRect" parent="StaticBody2D" unique_id=987272224]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -400.0
+offset_top = -16.0
+offset_right = 400.0
+offset_bottom = 16.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Elana" type="CharacterBody2D" parent="." unique_id=1361178898]
+position = Vector2(67, 155)
+script = ExtResource("1_aiegb")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Elana" unique_id=139109967]
+shape = SubResource("RectangleShape2D_arrdh")
+
+[node name="ColorRect" type="ColorRect" parent="Elana" unique_id=1984149942]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -16.0
+offset_top = -32.0
+offset_right = 16.0
+offset_bottom = 32.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Herb" type="Area2D" parent="." unique_id=77273099]
+position = Vector2(163, 279)
+script = ExtResource("2_oqbmf")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Herb" unique_id=796705372]
+shape = SubResource("CircleShape2D_arrdh")
+
+[node name="ColorRect" type="ColorRect" parent="Herb" unique_id=1645207217]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -8.0
+offset_top = -8.0
+offset_right = 8.0
+offset_bottom = 8.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0.63913876, 0.22529972, 1)
+
+[node name="Herb3" type="Area2D" parent="." unique_id=1948758500]
+position = Vector2(305, 279)
+script = ExtResource("2_oqbmf")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Herb3" unique_id=1440069636]
+shape = SubResource("CircleShape2D_arrdh")
+
+[node name="ColorRect" type="ColorRect" parent="Herb3" unique_id=2058873721]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -8.0
+offset_top = -8.0
+offset_right = 8.0
+offset_bottom = 8.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0.63913876, 0.22529972, 1)
+
+[node name="Herb2" type="Area2D" parent="." unique_id=1428715964]
+position = Vector2(230, 193)
+script = ExtResource("2_oqbmf")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Herb2" unique_id=289133144]
+shape = SubResource("CircleShape2D_arrdh")
+
+[node name="ColorRect" type="ColorRect" parent="Herb2" unique_id=772149203]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -8.0
+offset_top = -8.0
+offset_right = 8.0
+offset_bottom = 8.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0.63913876, 0.22529972, 1)
+
+[node name="OreNode" type="StaticBody2D" parent="." unique_id=1702766727]
+position = Vector2(380, 304)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="OreNode" unique_id=438499867]
+shape = SubResource("RectangleShape2D_ju58f")
+
+[node name="ColorRect" type="ColorRect" parent="OreNode" unique_id=6237798]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -8.0
+offset_top = -16.0
+offset_right = 8.0
+offset_bottom = 16.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.3810519, 0.33537835, 0.33701023, 1)

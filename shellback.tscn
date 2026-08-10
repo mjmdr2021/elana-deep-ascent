@@ -1,0 +1,15 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://enemy.tscn" id="1_enemy"]
+
+[node name="Shellback" instance=ExtResource("1_enemy")]
+max_hp = 70
+defense = 60
+speed = 20.0
+chase_speed = 30.0
+attack_damage = 12
+xp_reward = 25
+modulate = Color(0.55, 0.75, 0.4, 1)
+fire_resist = 2.0
+frost_resist = 0.25
+elec_resist = 0.25

@@ -1,0 +1,174 @@
+[gd_scene format=3 uid="uid://blytlqon5vyl6"]
+
+[ext_resource type="Script" uid="uid://dlux3do2n160o" path="res://enemy.gd" id="1_7k104"]
+[ext_resource type="Script" uid="uid://bmjyqjn82muoe" path="res://hit_handler.gd" id="2_4gyqm"]
+[ext_resource type="Texture2D" uid="uid://eyr8gm54bker" path="res://enemy1-attack2.png" id="3_doop2"]
+[ext_resource type="Texture2D" uid="uid://bnv3vhc80dih1" path="res://enemy1-attack3.png" id="4_5hcft"]
+[ext_resource type="Texture2D" uid="uid://bipxw0graxxbg" path="res://enemy1-attack4.png" id="5_nnovl"]
+[ext_resource type="Texture2D" uid="uid://cy2hf62agumj5" path="res://enemy1-attack5.png" id="6_jmwgi"]
+[ext_resource type="Texture2D" uid="uid://lmq8s1a46k58" path="res://enemy1-attack6.png" id="7_g2u8i"]
+[ext_resource type="Texture2D" uid="uid://ceiq6opujgwtc" path="res://enemy1-attack.png" id="8_otto8"]
+[ext_resource type="Texture2D" uid="uid://pss4wgopk86j" path="res://enemy1-idle1.png" id="9_8q82m"]
+[ext_resource type="Texture2D" uid="uid://cxtxvvid7lbmj" path="res://enemy1-idle2.png" id="10_epc7x"]
+[ext_resource type="Texture2D" uid="uid://ciu0lp1ewujed" path="res://enemy1-idle3.png" id="11_o7rgc"]
+[ext_resource type="Texture2D" uid="uid://dk357ggg251n2" path="res://enemy1-walk1.png" id="12_kdav3"]
+[ext_resource type="Texture2D" uid="uid://ds8rpq6gh7n3u" path="res://enemy1-walk2.png" id="13_jpbtr"]
+[ext_resource type="Texture2D" uid="uid://coettna78p7ad" path="res://enemy1-walk3.png" id="14_qgdfx"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_7xaro"]
+size = Vector2(16, 16)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_7k104"]
+size = Vector2(24, 20)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_4gyqm"]
+size = Vector2(100, 32)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_qi2p4"]
+size = Vector2(20, 16)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_qku5p"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("3_doop2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_5hcft")
+}, {
+"duration": 1.0,
+"texture": ExtResource("5_nnovl")
+}, {
+"duration": 1.0,
+"texture": ExtResource("6_jmwgi")
+}, {
+"duration": 1.0,
+"texture": ExtResource("7_g2u8i")
+}, {
+"duration": 1.0,
+"texture": ExtResource("8_otto8")
+}],
+"loop": true,
+"name": &"attack",
+"speed": 8.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("9_8q82m")
+}, {
+"duration": 1.0,
+"texture": ExtResource("10_epc7x")
+}, {
+"duration": 1.0,
+"texture": ExtResource("11_o7rgc")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 4.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("12_kdav3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("13_jpbtr")
+}, {
+"duration": 1.0,
+"texture": ExtResource("14_qgdfx")
+}, {
+"duration": 1.0,
+"texture": ExtResource("13_jpbtr")
+}],
+"loop": true,
+"name": &"walk",
+"speed": 8.0
+}]
+
+[sub_resource type="Gradient" id="Gradient_eyeglow"]
+offsets = PackedFloat32Array(0, 0.35, 1)
+colors = PackedColorArray(3, 3, 3, 1, 1, 1, 1, 0.55, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_eyeglow"]
+gradient = SubResource("Gradient_eyeglow")
+width = 128
+height = 128
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[node name="Enemy" type="CharacterBody2D" unique_id=792037192]
+collision_layer = 2
+script = ExtResource("1_7k104")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1727898149]
+shape = SubResource("RectangleShape2D_7xaro")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=1010190937]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -8.0
+offset_top = -8.0
+offset_right = 8.0
+offset_bottom = 8.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.45561373, 0.00455868, 0.28787547, 1)
+
+[node name="Hurtbox" type="Area2D" parent="." unique_id=1153438017]
+collision_layer = 4
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox" unique_id=147929415]
+position = Vector2(0, -2)
+shape = SubResource("RectangleShape2D_7k104")
+
+[node name="AggroZone" type="Area2D" parent="." unique_id=1077512632]
+position = Vector2(50, 0)
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="AggroZone" unique_id=1848180697]
+position = Vector2(0, -8)
+shape = SubResource("RectangleShape2D_4gyqm")
+
+[node name="AttackZone" type="Area2D" parent="." unique_id=696568212]
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="AttackZone" unique_id=476977613]
+shape = SubResource("RectangleShape2D_qi2p4")
+
+[node name="WallCheck" type="RayCast2D" parent="." unique_id=2101683927]
+
+[node name="HPBar" type="Node2D" parent="." unique_id=1201449712]
+position = Vector2(-15, -20)
+
+[node name="Background" type="ColorRect" parent="HPBar" unique_id=1036858811]
+offset_right = 30.0
+offset_bottom = 4.0
+color = Color(0.18862307, 0.19213569, 0.18689519, 1)
+
+[node name="Fill" type="ColorRect" parent="HPBar" unique_id=1733373298]
+offset_right = 30.0
+offset_bottom = 4.0
+color = Color(0.42163658, 0, 0.129971, 1)
+
+[node name="HitHandler" type="Node" parent="." unique_id=291538929]
+script = ExtResource("2_4gyqm")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1381496649]
+position = Vector2(0, -8)
+sprite_frames = SubResource("SpriteFrames_qku5p")
+animation = &"attack"
+frame_progress = 0.034470353
+
+[node name="EyeGlow" type="PointLight2D" parent="." unique_id=1256647004]
+position = Vector2(6, -10)
+color = Color(1, 0.15, 0.1, 1)
+energy = 0.5
+texture = SubResource("GradientTexture2D_eyeglow")
+texture_scale = 0.2

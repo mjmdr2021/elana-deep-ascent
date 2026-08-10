@@ -1,0 +1,14 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://flying_enemy.tscn" id="1_flying"]
+[ext_resource type="Script" path="res://spark_jelly.gd" id="2_spark_jelly"]
+
+[node name="SparkJelly" instance=ExtResource("1_flying")]
+script = ExtResource("2_spark_jelly")
+max_hp = 30
+defense = 5
+attack_damage = 0
+speed = 2.0
+xp_reward = 16
+modulate = Color(1.0, 0.9, 0.3, 1)
+elec_resist = 0.0

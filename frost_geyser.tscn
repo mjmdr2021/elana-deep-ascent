@@ -1,0 +1,32 @@
+[gd_scene format=3 uid="uid://dui6tiqndqj1l"]
+
+[ext_resource type="Script" uid="uid://b2q4kpt5pr67c" path="res://frost_geyser.gd" id="1_eet6y"]
+[ext_resource type="Script" path="res://proximity_visibility.gd" id="2_pv"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_i145k"]
+size = Vector2(16, 24)
+
+[node name="FrostGeyser" type="Area2D" unique_id=1979914227]
+collision_layer = 0
+collision_mask = 2
+script = ExtResource("1_eet6y")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=39637584]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -8.0
+offset_top = -8.0
+offset_right = 8.0
+offset_bottom = 8.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1003214353]
+position = Vector2(0, -20)
+shape = SubResource("RectangleShape2D_i145k")
+
+[node name="ProximityVisibility" type="Node" parent="."]
+script = ExtResource("2_pv")

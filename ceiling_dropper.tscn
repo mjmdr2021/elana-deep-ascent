@@ -1,0 +1,14 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://enemy.tscn" id="1_enemy"]
+[ext_resource type="Script" path="res://ceiling_dropper.gd" id="2_ceiling_dropper"]
+
+[node name="CeilingDropper" instance=ExtResource("1_enemy")]
+script = ExtResource("2_ceiling_dropper")
+max_hp = 25
+defense = 5
+speed = 25.0
+chase_speed = 45.0
+attack_damage = 10
+xp_reward = 14
+modulate = Color(0.55, 0.45, 0.65, 1)
