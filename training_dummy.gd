@@ -130,8 +130,8 @@ func apply_poison(damage_per_tick: int, ticks: int = 8) -> void:
 	poison_ticks_remaining = max(poison_ticks_remaining, ticks)
 	poison_tick_timer = 1.0
 
-func on_hit(hit_direction: int, damage: int, is_magic: bool = false) -> void:
-	$HitHandler.on_hit(hit_direction, damage, is_magic)
+func on_hit(hit_direction: int, damage: int, is_magic: bool = false, attacker: Node = null) -> void:
+	$HitHandler.on_hit(hit_direction, damage, is_magic, attacker)
 
-func on_elemental_hit(element: String, hit_direction: int, damage: int) -> void:
-	$HitHandler.on_elemental_hit(element, hit_direction, damage)
+func on_elemental_hit(element: String, hit_direction: int, damage: int, attacker: Node = null) -> void:
+	$HitHandler.on_elemental_hit(element, hit_direction, damage, attacker)

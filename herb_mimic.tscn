@@ -10,4 +10,4 @@ defense = 0
 speed = 25.0
 chase_speed = 45.0
 attack_damage = 8
-xp_reward = 10
+xp_reward = 60

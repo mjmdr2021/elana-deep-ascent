@@ -7,9 +7,11 @@ extends "res://enemy.gd"
 # Glint's light-dim, all the longer Elana stays — reapplied every physics
 # frame with a short duration, so they decay out naturally within ~0.3s of
 # leaving instead of needing explicit removal code (same trick apply_slow
-# already used elsewhere). Poison stays flat and negligible on purpose —
-# the escalating slow/weight is what makes lingering actually costly
-# (harder to leave = more ticks eaten), not the poison's own tick value.
+# already used elsewhere). Poison scales with max HP (poison_pct_of_max_hp,
+# 2%) rather than a flat number, so it stays proportionally negligible
+# regardless of how Elana's max HP grows over the run — the escalating
+# slow/weight is what makes lingering actually costly (harder to leave =
+# more ticks eaten), not the poison's own tick value.
 # Killing it frees the cloud's Area2D/visual immediately (they're children
 # of this node), which also lets any already-applied effects decay out on
 # their own short timers.
@@ -19,7 +21,7 @@ extends "res://enemy.gd"
 @export var slow_ramp_time: float = 3.0
 @export var dim_min_factor: float = 1.0
 @export var dim_max_factor: float = 0.35
-@export var poison_tick_damage: int = 1
+@export var poison_pct_of_max_hp: float = 0.02
 const VISUAL_SIZE: float = 18.0
 const VISUAL_COLOR: Color = Color(0.55, 0.3, 0.7, 1.0)
 const CLOUD_COLOR: Color = Color(0.55, 0.3, 0.7, 0.22)
@@ -91,7 +93,8 @@ func _tick_timers(delta: float) -> void:
 		return
 	elana.apply_slow(lerp(slow_min_factor, slow_max_factor, t), 0.3)
 	elana.apply_jump_weight(lerp(slow_min_factor, slow_max_factor, t), 0.3)
-	elana.apply_player_poison(poison_tick_damage, 2)
+	var poison_dmg = max(1, int(GameData.max_hp * poison_pct_of_max_hp))
+	elana.apply_player_poison(poison_dmg, 2)
 	var glint = elana.get_node_or_null("Glint")
 	if glint and glint.has_method("apply_light_dim"):
 		glint.apply_light_dim(lerp(dim_min_factor, dim_max_factor, t), 0.3)

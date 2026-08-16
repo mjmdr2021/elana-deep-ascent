@@ -7,6 +7,14 @@ const ITEM_USE_COOLDOWN = 3
 
 var hp_fill: ColorRect
 var hp_bg: ColorRect
+# Persistent top-of-screen boss HP bar — separate from any floating HPBar a
+# boss scene draws above itself (e.g. hollowfang.gd's own), only visible
+# while a "bosses"-group member is actually in the scene and alive.
+var _boss_hp_root: Control
+var _boss_hp_bg: ColorRect
+var _boss_hp_fill: ColorRect
+var _boss_hp_name_label: Label
+var _current_boss: Node = null
 var inventory_overlay: ColorRect
 var char_overlay: ColorRect
 var skill_overlay: ColorRect
@@ -29,6 +37,14 @@ var _dialogue_speaker_nodes: Dictionary = {}
 var _dialogue_speaker_colors: Dictionary = {}
 const DIALOGUE_DEFAULT_TEXT_COLOR: Color = Color.BLACK
 const DIALOGUE_DEFAULT_SPEAKER_COLOR: Color = Color(0.3, 0.25, 0.05)
+# Generic skip button, reused by any multi-beat cutscene coroutine (stone
+# being intro, Elana's opening cutscene, etc.) — the button itself only
+# knows how to raise a flag and force-close whatever dialogue line is
+# currently up; each cutscene script is responsible for checking
+# skip_requested after its own await points and jumping to its own finalize
+# step, since only it knows what "the end state" of its sequence looks like.
+var _skip_button: Button
+var skip_requested: bool = false
 var _flash_overlay: ColorRect
 var _prompt_box: Panel
 var _prompt_label: Label
@@ -49,12 +65,14 @@ var elemander_pads_button: Button
 var golden_cloak_button: Button
 var hollowscale_button: Button
 var danger_sense_button: Button
+var ant_queen_buff_button: Button
 var reset_cooldowns_button: Button
 var fixed_zoom_button: Button
 var screen_shake_button: Button
 var item_use_cooldown = 0.0
 var _stat_labels: Dictionary = {}
 var hovered_inventory_slot: int = -1
+var hovered_quickslot_slot: int = -1
 
 var _hud_visible: bool = true
 var _gameplay_layers: Array = []
@@ -123,6 +141,7 @@ const ITEM_DESCRIPTIONS: Dictionary = {
 	"ore2": "Chain Claw Ore — Consume to transform Glint into a Chain Claw.",
 	"ore3": "Spear Ore — Consume to transform Glint into a Spear.",
 	"ore4": "Warhammer Ore — Consume to transform Glint into a Warhammer.",
+	"note1": "These \"Ritual Nodes\" that light up— they apparently store my soul. So when I die, these things revive me, and I start all over again.",
 }
 # On-first-consume popup text (_show_item_tooltip) — separate, in-character
 # phrasing from Elana's POV, distinct from the inventory hover description.
@@ -144,6 +163,7 @@ func _ready():
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_setup_toggles()
 	_setup_bottom_hud()
+	_setup_boss_hp_bar()
 	_setup_inventory()
 	_setup_character_screen()
 	_setup_skill_tree()
@@ -151,8 +171,10 @@ func _ready():
 	_setup_options()
 	_setup_danger_sense_overlay()
 	_setup_dialogue_box()
+	_setup_skip_button()
 	_setup_flash_overlay()
 	_setup_prompt_box()
+	_setup_debug_overlay()
 
 const DIALOGUE_MAX_WIDTH: float = 360.0
 const DIALOGUE_PADDING: float = 14.0
@@ -162,6 +184,36 @@ const DIALOGUE_WORLD_OFFSET: Vector2 = Vector2(0, -25)  # above Elana's head
 # (ore/herb hints), so callers can override per-call instead of sharing
 # the dialogue box's offset.
 const PROMPT_WORLD_OFFSET: Vector2 = Vector2(0, -25)
+
+# Screen-space debug readout — Elana's world position + current FPS, top
+# right corner. Independent CanvasLayer/high layer number so it always
+# draws on top of everything else, same convention as the dialogue/flash
+# layers above.
+var _debug_overlay_label: Label
+
+func _setup_debug_overlay() -> void:
+	var layer = CanvasLayer.new()
+	layer.layer = 50
+	add_child(layer)
+
+	_debug_overlay_label = Label.new()
+	_debug_overlay_label.anchor_left = 1.0
+	_debug_overlay_label.anchor_right = 1.0
+	_debug_overlay_label.offset_left = -220.0
+	_debug_overlay_label.offset_right = -8.0
+	_debug_overlay_label.offset_top = 8.0
+	_debug_overlay_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_debug_overlay_label.add_theme_font_size_override("font_size", 14)
+	_debug_overlay_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.85))
+	_debug_overlay_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_debug_overlay_label)
+
+func _update_debug_overlay() -> void:
+	var player = get_tree().get_first_node_in_group("player")
+	var pos_text = "pos: (n/a)"
+	if player:
+		pos_text = "pos: (%.1f, %.1f)" % [player.global_position.x, player.global_position.y]
+	_debug_overlay_label.text = pos_text + "\nfps: %d" % Engine.get_frames_per_second()
 
 func _setup_dialogue_box() -> void:
 	_dialogue_layer = CanvasLayer.new()
@@ -380,15 +432,53 @@ func _update_prompt_position() -> void:
 func _advance_dialogue() -> void:
 	_dialogue_index += 1
 	if _dialogue_index >= _dialogue_lines.size():
-		_dialogue_active = false
-		_dialogue_box.visible = false
-		if _dialogue_was_blocking:
-			GameData.in_cutscene = false
-		dialogue_finished.emit()
+		_close_dialogue_box()
 	else:
 		_display_current_dialogue_line()
 		_update_dialogue_position()
 		_update_dialogue_position()
+
+# Shared end-of-sequence cleanup — same steps _advance_dialogue() ran inline
+# when it reached the last line, now also reused by the skip button to force
+# a currently-open box closed immediately instead of waiting for the player
+# to click through every remaining line.
+func _close_dialogue_box() -> void:
+	_dialogue_active = false
+	_dialogue_box.visible = false
+	if _dialogue_was_blocking:
+		GameData.in_cutscene = false
+	dialogue_finished.emit()
+
+func _setup_skip_button() -> void:
+	_skip_button = Button.new()
+	_skip_button.text = "Skip ▶"
+	_skip_button.anchor_left = 1.0
+	_skip_button.anchor_right = 1.0
+	_skip_button.offset_left = -90.0
+	_skip_button.offset_right = -10.0
+	_skip_button.offset_top = 10.0
+	_skip_button.offset_bottom = 38.0
+	_skip_button.visible = false
+	_skip_button.pressed.connect(_on_skip_button_pressed)
+	_dialogue_layer.add_child(_skip_button)
+
+func _on_skip_button_pressed() -> void:
+	skip_requested = true
+	if _dialogue_active:
+		_close_dialogue_box()
+	hide_skip_button()
+
+# Call at the start of a skippable cutscene; the calling script must check
+# skip_requested after each of its own await points and jump straight to its
+# own finalize step when it's true. Call hide_skip_button() again once the
+# sequence actually ends (skipped or not) — this doesn't auto-hide itself
+# except on the skip press.
+func show_skip_button() -> void:
+	skip_requested = false
+	_skip_button.visible = true
+
+func hide_skip_button() -> void:
+	_skip_button.visible = false
 
 func _setup_danger_sense_overlay() -> void:
 	var canvas = CanvasLayer.new()
@@ -550,6 +640,13 @@ func _setup_toggles():
 		Vector2(10, 770), _on_screen_shake_toggled)
 	canvas.add_child(screen_shake_button)
 
+	canvas.add_child(_make_toggle_button("Level Up (Dev)", Vector2(10, 810), _on_level_up))
+
+	ant_queen_buff_button = _make_toggle_button(
+		"Ant Queen Buff: ON" if GameData.ant_queen_defeated else "Ant Queen Buff: OFF",
+		Vector2(10, 850), _on_ant_queen_buff_toggled)
+	canvas.add_child(ant_queen_buff_button)
+
 func _on_give_respecs():
 	GameData.add_item("respecElana")
 	GameData.add_item("respecGlint")
@@ -562,6 +659,13 @@ func _on_max_all_skills():
 
 func _on_max_level():
 	GameData.dev_set_max_level()
+
+# Unlike _on_max_level()'s straight-to-100 cheat loop, this goes through
+# the real gain_xp() path for exactly one level — same SP/max_hp rewards a
+# real level-up grants, useful for testing that flow specifically without
+# jumping the whole way to 100.
+func _on_level_up():
+	GameData.gain_xp(GameData.xp_to_next() - GameData.xp)
 
 func _on_fill_herbs():
 	for herb in ["herbElementalFire", "herbElementalFrost", "herbElementalElec", "herbAgility", "herbHeal", "herbPower"]:
@@ -622,6 +726,14 @@ func _on_hollowscale_toggled():
 func _on_danger_sense_toggled():
 	GameData.danger_sense_unlocked = not GameData.danger_sense_unlocked
 	danger_sense_button.text = "Danger Sense: ON" if GameData.danger_sense_unlocked else "Danger Sense: OFF"
+
+# Ant Queen's death reward — +50% reduction to hazard damage (spikes, vine
+# thorns, Hollowfang's falling rocks) — see elana.gd's take_damage() and
+# GameData.HAZARD_DAMAGE_REDUCTION. Same dev-toggle pattern as the other
+# boss blessings above, for testing without actually killing her first.
+func _on_ant_queen_buff_toggled():
+	GameData.ant_queen_defeated = not GameData.ant_queen_defeated
+	ant_queen_buff_button.text = "Ant Queen Buff: ON" if GameData.ant_queen_defeated else "Ant Queen Buff: OFF"
 
 func _on_reset_cooldowns_toggled():
 	GameData.dev_no_cooldowns = not GameData.dev_no_cooldowns
@@ -936,6 +1048,73 @@ func _setup_bottom_hud():
 	_ore_time_label = _make_indicator_label(_ore_indicator, 122)
 	_ore_name_label = _make_indicator_label(_ore_indicator, 138)
 
+func _setup_boss_hp_bar() -> void:
+	var layer = CanvasLayer.new()
+	layer.layer = 5
+	add_child(layer)
+	_gameplay_layers.append(layer)
+
+	var bar_width = 480
+	_boss_hp_root = Control.new()
+	_boss_hp_root.anchor_left = 0.5
+	_boss_hp_root.anchor_right = 0.5
+	_boss_hp_root.offset_left = -bar_width / 2.0
+	_boss_hp_root.offset_right = bar_width / 2.0
+	_boss_hp_root.offset_top = 18
+	_boss_hp_root.offset_bottom = 44
+	_boss_hp_root.visible = false
+	layer.add_child(_boss_hp_root)
+
+	_boss_hp_name_label = Label.new()
+	_boss_hp_name_label.anchor_left = 0.0
+	_boss_hp_name_label.anchor_right = 1.0
+	_boss_hp_name_label.offset_top = -20
+	_boss_hp_name_label.offset_bottom = -2
+	_boss_hp_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_boss_hp_name_label.add_theme_font_size_override("font_size", 14)
+	_boss_hp_name_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.7))
+	_boss_hp_root.add_child(_boss_hp_name_label)
+
+	_boss_hp_bg = ColorRect.new()
+	_boss_hp_bg.color = Color(0.1, 0.08, 0.08)
+	_boss_hp_bg.anchor_left = 0.0
+	_boss_hp_bg.anchor_right = 1.0
+	_boss_hp_bg.anchor_top = 0.0
+	_boss_hp_bg.anchor_bottom = 1.0
+	_boss_hp_root.add_child(_boss_hp_bg)
+
+	_boss_hp_fill = ColorRect.new()
+	_boss_hp_fill.color = Color(0.75, 0.12, 0.12)
+	_boss_hp_bg.add_child(_boss_hp_fill)
+
+# Shows/hides and fills the top-of-screen bar based on whether a
+# "bosses"-group member is currently in the scene and alive — works for
+# any future boss, not just Hollowfang, as long as it exposes hp/max_hp
+# (every boss so far does, same convention as regular enemies). Only
+# re-searches the group when the cached reference goes stale (dies/frees),
+# not every single frame.
+func _update_boss_hp_bar() -> void:
+	# Only shows once the boss-arena reveal cutscene has actually started
+	# (GameData.boss_zoom_active, set by dialog_marker.gd's CAMERA_PAN
+	# cutscene) — not just whenever a "bosses"-group member happens to
+	# exist in the scene, which could be well before the player's even
+	# supposed to have seen it yet. boss_zoom_active only clears via
+	# reset_boss_camera() (boss death or player respawn), so hiding follows
+	# the same lifecycle automatically.
+	if not GameData.boss_zoom_active:
+		_boss_hp_root.visible = false
+		return
+	if _current_boss == null or not is_instance_valid(_current_boss):
+		_current_boss = get_tree().get_first_node_in_group("bosses")
+	if _current_boss == null or not is_instance_valid(_current_boss) or _current_boss.hp <= 0:
+		_boss_hp_root.visible = false
+		return
+	_boss_hp_root.visible = true
+	_boss_hp_name_label.text = _current_boss.name.to_upper()
+	if _boss_hp_bg.size.x > 0:
+		var ratio = clamp(float(_current_boss.hp) / float(_current_boss.max_hp), 0.0, 1.0)
+		_boss_hp_fill.size = Vector2(_boss_hp_bg.size.x * ratio, _boss_hp_bg.size.y)
+
 func _make_indicator_label(parent: Control, top: int) -> Label:
 	var lbl = Label.new()
 	lbl.anchor_left = 0.0
@@ -1044,7 +1223,8 @@ func _setup_character_screen():
 	for entry: Array in [
 		["Max HP", "max_hp"], ["Attack DMG", "attack"], ["Magic DMG", "magic"],
 		["Speed", "speed"], ["Attack Speed", "attack_speed"], ["HP Regen", "hp_regen"],
-		["Defense", "defense"], ["Dodge Chance", "dodge_chance"], ["Elemental Resist", "elem_resist_display"]
+		["Defense", "defense"], ["Dodge Chance", "dodge_chance"], ["Elemental Resist", "elem_resist_display"],
+		["Hazard Resist", "hazard_resist"], ["Crit Chance", "crit_chance"], ["Crit Damage", "crit_damage"]
 	]:
 		_stat_labels[entry[1]] = _char_row(vbox, entry[0])
 
@@ -1098,6 +1278,13 @@ func refresh_character_screen() -> void:
 	_set_stat("hp_regen", "%.1f / sec" % (GameData.hp_regen + GameData.hp_regen_herb_bonus), GameData.hp_regen_herb_bonus > 0)
 	_set_stat("defense", str(GameData.get_defense()))
 	_set_stat("dodge_chance", "%.0f%%" % (GameData.dodge_chance * 100.0))
+	# Ant Queen's death reward — see elana.gd's take_damage() and
+	# GameData.HAZARD_DAMAGE_REDUCTION. 0% until she's actually defeated
+	# (or the dev toggle is flipped on).
+	var hazard_resist_pct = GameData.HAZARD_DAMAGE_REDUCTION * 100.0 if GameData.ant_queen_defeated else 0.0
+	_set_stat("hazard_resist", "%.0f%%" % hazard_resist_pct, GameData.ant_queen_defeated)
+	_set_stat("crit_chance", "%.0f%%" % (GameData.glint_crit_chance * 100.0), GameData.glint_crit_chance > 0.0)
+	_set_stat("crit_damage", "%.2fx" % GameData.glint_crit_dmg_mult, GameData.glint_crit_dmg_mult > 1.5)
 	var resist_element := ""
 	if GameData.active_herb != null:
 		match GameData.active_herb.item_id:
@@ -1608,15 +1795,19 @@ func _exit_to_title() -> void:
 	GameData.glint_scout_returning = false
 	get_tree().change_scene_to_file("res://title_screen.tscn")
 
-# Force-closes the dialogue box, the red instruction prompt, and the flash
-# overlay regardless of what state they were mid-sequence in. Used for hard
-# bailouts (exit to title) where nothing else will clean them up.
+# Force-closes the dialogue box, the red instruction prompt, the skip
+# button, and the flash overlay regardless of what state they were
+# mid-sequence in. Used for hard bailouts (exit to title) where nothing else
+# will clean them up — HUD is an autoload, so without this a skip button
+# left visible mid-cutscene would still be sitting there after returning to
+# the title screen and starting a fresh run.
 func close_all_dialogue_ui() -> void:
 	_dialogue_active = false
 	_dialogue_box.visible = false
 	_prompt_active = false
 	_prompt_box.visible = false
 	_flash_overlay.color.a = 0.0
+	hide_skip_button()
 
 # Full-screen "YOU DIED" overlay — dims the screen, shows the title and a
 # hint below it, then waits for literally any key/mouse/joypad press before
@@ -1723,7 +1914,13 @@ func _input(event):
 	elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ENTER:
 		advance = true
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		advance = true
+		# A click landing on the visible Skip button is its own action, not a
+		# dialogue-advance — since this function wins the race against every
+		# other input handler (see comment above), left uncaught it would
+		# consume the click here and set_input_as_handled() below would then
+		# stop it from ever reaching the button's own "pressed" signal.
+		if not (_skip_button.visible and _skip_button.get_global_rect().has_point(event.position)):
+			advance = true
 	if advance:
 		_advance_dialogue()
 		get_viewport().set_input_as_handled()
@@ -1735,7 +1932,10 @@ func _unhandled_input(event):
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
 		if get_tree().get_first_node_in_group("player") == null:
 			return
-		if _options_open:
+		var moleman_trade = get_tree().get_first_node_in_group("moleman_trade_ui")
+		if moleman_trade:
+			moleman_trade.get_parent().queue_free()
+		elif _options_open:
 			_toggle_options()
 		elif inventory_open or char_screen_open or skill_tree_open or glint_tree_open:
 			_close_all_overlays()
@@ -1765,13 +1965,17 @@ func _unhandled_input(event):
 				_toggle_glint_skill_tree()
 			elif event.keycode >= KEY_1 and event.keycode <= KEY_9:
 				var idx = event.keycode - KEY_1
-				if hovered_inventory_slot >= 0:
+				if hovered_quickslot_slot >= 0:
+					_swap_quickslots(hovered_quickslot_slot, idx)
+				elif hovered_inventory_slot >= 0:
 					_assign_to_quickslot(hovered_inventory_slot, idx)
 				elif not inventory_open and not char_screen_open and not skill_tree_open and not glint_tree_open:
 					_select_slot(idx)
 					_use_selected_item()
 			elif event.keycode == KEY_0:
-				if hovered_inventory_slot >= 0:
+				if hovered_quickslot_slot >= 0:
+					_swap_quickslots(hovered_quickslot_slot, 9)
+				elif hovered_inventory_slot >= 0:
 					_assign_to_quickslot(hovered_inventory_slot, 9)
 				elif not inventory_open and not char_screen_open and not skill_tree_open and not glint_tree_open:
 					_select_slot(9)
@@ -1786,6 +1990,10 @@ func _use_selected_item() -> void:
 	if slot["item"] == "":
 		return
 	var item_id = slot["item"]
+	# Key items (lore notes, etc.) have no quickslot effect — do nothing
+	# rather than consuming/removing one if it was ever dragged in here.
+	if GameData.KEY_ITEM_REGISTRY.has(item_id):
+		return
 	# Quick Feed: ores bypass the shared item-use cooldown entirely
 	var quick_feed = GameData.ORE_REGISTRY.has(item_id) and GameData.get_glint_skill_level("g_quick_feed") >= 1
 	# Quick Digestion: herbs bypass it too, same idea as Quick Feed but for herbs
@@ -1817,7 +2025,20 @@ func _assign_to_quickslot(inv_idx: int, qs_idx: int) -> void:
 	GameData.inventory_slots[inv_idx] = qs_item
 	refresh_slots()
 
+# Hover a quickslot, press a number — swaps that quickslot's item into the
+# pressed number's position (and whatever was there back into the hovered
+# one). Same "hover + number key" shape as _assign_to_quickslot() above,
+# just quickslot-to-quickslot instead of inventory-to-quickslot.
+func _swap_quickslots(from_idx: int, to_idx: int) -> void:
+	if from_idx == to_idx:
+		return
+	var tmp = GameData.quickslot_slots[to_idx].duplicate()
+	GameData.quickslot_slots[to_idx] = GameData.quickslot_slots[from_idx].duplicate()
+	GameData.quickslot_slots[from_idx] = tmp
+	refresh_slots()
+
 func _process(delta):
+	_update_debug_overlay()
 	item_use_cooldown = max(0.0, item_use_cooldown - delta)
 	if GameData.dev_no_cooldowns:
 		item_use_cooldown = 0.0
@@ -1840,6 +2061,7 @@ func _process(delta):
 	if hp_bg.size.x > 0:
 		var hp_ratio = clamp(float(GameData.hp) / float(GameData.max_hp), 0.0, 1.0)
 		hp_fill.size = Vector2(hp_bg.size.x * hp_ratio, hp_bg.size.y)
+	_update_boss_hp_bar()
 	if _shield_bg.size.x > 0:
 		var shield_ratio = clamp(GameData.passive_shield_hp / float(GameData.max_hp), 0.0, 1.0)
 		_shield_fill.size = Vector2(_shield_bg.size.x * shield_ratio, _shield_bg.size.y)

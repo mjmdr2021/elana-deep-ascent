@@ -60,6 +60,7 @@ func _apply_damage(hit_direction: int, damage: int) -> int:
 	if _enemy.has_method("modify_incoming_damage"):
 		damage = _enemy.modify_incoming_damage(hit_direction, damage)
 		if damage <= 0:
+			GameData.last_hit_is_crit = false
 			return 0
 	_enemy.direction = -hit_direction
 	# Executioner — instakill at ≤15% HP
@@ -68,21 +69,33 @@ func _apply_damage(hit_direction: int, damage: int) -> int:
 		if emax > 0 and _enemy.hp <= emax * 0.15 and randf() < GameData.executioner_chance:
 			var kill_dmg: int = int(_enemy.hp)
 			_enemy.hp = 0
+			GameData.last_hit_is_crit = false
 			GameData.spawn_damage_number(kill_dmg, _enemy.global_position, Color(1.0, 0.1, 0.5))
 			return kill_dmg
 	var effective_defense = float(_enemy.defense) * (1.0 - GameData.armor_penetration)
 	var final_damage = GameData.calc_damage(float(damage), effective_defense)
 	_enemy.hp -= final_damage
 	_enemy.regen_delay_timer = 3.0
-	GameData.spawn_damage_number(final_damage, _enemy.global_position)
+	# Consume-and-clear: elana.gd's crit rolls set this immediately before
+	# calling on_hit()/on_elemental_hit(), and this is the one place that
+	# ever spawns the resulting damage number, so it can't leak into an
+	# unrelated later hit (DoT tick, another enemy's on_hit, etc.).
+	var number_color = GameData.CRIT_DAMAGE_COLOR if GameData.last_hit_is_crit else Color.WHITE
+	GameData.last_hit_is_crit = false
+	GameData.spawn_damage_number(final_damage, _enemy.global_position, number_color)
 	return final_damage
 
-func _die() -> void:
+func _die(attacker: Node = null) -> void:
 	if _enemy.get("immortal"):
 		return
 	GameData.mark_removed(get_tree().current_scene.scene_file_path, _enemy.name)
 	GameData.glint_register_kill()
-	GameData.gain_xp(_enemy.xp_reward)
+	# XP only for a kill Elana actually landed herself — not a DoT tick,
+	# environmental hazard (falling rocks, etc.), or another enemy's
+	# friendly fire. attacker is whoever on_hit()/on_elemental_hit() below
+	# identified itself as (null unless the caller explicitly passed one).
+	if attacker != null and is_instance_valid(attacker) and attacker.is_in_group("player"):
+		GameData.gain_xp(_enemy.xp_reward)
 	# Generic death hook — any enemy subclass can implement on_death() to
 	# react to its own death (Splitter spawning smaller copies, a future
 	# Exploder's AOE burst, etc.) without hit_handler.gd needing to know
@@ -103,7 +116,7 @@ func _get_element_mult(element: String) -> float:
 			return float(_enemy.get("elec_resist")) if _enemy.get("elec_resist") != null else 1.0
 	return 1.0
 
-func on_elemental_hit(element: String, hit_direction: int, damage: int) -> void:
+func on_elemental_hit(element: String, hit_direction: int, damage: int, attacker: Node = null) -> void:
 	var mult: float = _get_element_mult(element)
 	if mult <= 0.0:
 		return
@@ -125,13 +138,13 @@ func on_elemental_hit(element: String, hit_direction: int, damage: int) -> void:
 			_enemy.is_frozen = true
 			_enemy.set("freeze_immune_timer", 3.0)
 	if _enemy.hp <= 0:
-		_die()
+		_die(attacker)
 		return
 	_flash_hit()
 	await get_tree().create_timer(0.1).timeout
 	_set_flash_color(Color(0.4, 0.75, 1.0) if _enemy.is_frozen else _enemy.original_color)
 
-func on_hit(hit_direction: int, damage: int = 10, is_magic: bool = false) -> void:
+func on_hit(hit_direction: int, damage: int = 10, is_magic: bool = false, attacker: Node = null) -> void:
 	if _apply_damage(hit_direction, damage) == 0:
 		return
 	# Anger Strikes — bonus % of enemy max HP, Power Herb only
@@ -145,7 +158,7 @@ func on_hit(hit_direction: int, damage: int = 10, is_magic: bool = false) -> voi
 				_enemy._pending_knockback = Vector2(hit_direction * GameData.weapon_knockback_x, GameData.weapon_knockback_y)
 			if GameData.weapon_has_stun:
 				_enemy.is_stunned = true
-		_die()
+		_die(attacker)
 		return
 	_flash_hit()
 	if is_magic:

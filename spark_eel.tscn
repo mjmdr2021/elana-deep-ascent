@@ -8,6 +8,6 @@ script = ExtResource("2_spark_eel")
 max_hp = 28
 defense = 5
 attack_damage = 10
-xp_reward = 18
+xp_reward = 68
 modulate = Color(0.85, 0.85, 0.3, 1)
 elec_resist = 0.0

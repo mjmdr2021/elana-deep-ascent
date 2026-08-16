@@ -8,6 +8,6 @@ script = ExtResource("2_ice_plant_spitter")
 max_hp = 28
 defense = 5
 fire_rate = 2.5
-xp_reward = 12
+xp_reward = 62
 frost_resist = 0.25
 fire_resist = 2.0

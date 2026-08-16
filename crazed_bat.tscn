@@ -1,0 +1,25 @@
+[gd_scene format=3 uid="uid://bdoob6hcnsf42"]
+
+[ext_resource type="PackedScene" uid="uid://tl02knkp8306" path="res://flying_enemy.tscn" id="1_flying"]
+[ext_resource type="Script" uid="uid://btun1tbqf1ldb" path="res://crazed_bat.gd" id="2_crazed_bat"]
+
+[node name="CrazedBat" unique_id=979529786 instance=ExtResource("1_flying")]
+modulate = Color(0.5, 0.3, 0.6, 1)
+scale = Vector2(0.6, 0.6)
+script = ExtResource("2_crazed_bat")
+attack_range = 55.0
+windup_time = 0.4
+reverse_speed = 50.0
+dash_speed = 220.0
+dash_duration = 0.3
+recover_time = 0.5
+attack_cooldown_bat = 1.2
+hit_check_radius = 16.0
+speed = 35.0
+chase_speed = 70.0
+max_hp = 12
+xp_reward = 56
+attack_damage = 5
+
+[node name="CollisionShape2D" parent="AggroZone" parent_id_path=PackedInt32Array(1077512632) index="0" unique_id=1848180697]
+position = Vector2(-46.66667, 35.000004)

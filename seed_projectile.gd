@@ -72,7 +72,7 @@ func _land(hatch: bool) -> void:
 		get_parent().call_deferred("add_child", swarmer)
 	queue_free()
 
-func on_hit(_hit_direction: int, dmg: int, _is_magic: bool = false) -> void:
+func on_hit(_hit_direction: int, dmg: int, _is_magic: bool = false, _attacker: Node = null) -> void:
 	if _done:
 		return
 	hp -= dmg
@@ -80,5 +80,5 @@ func on_hit(_hit_direction: int, dmg: int, _is_magic: bool = false) -> void:
 		_done = true
 		queue_free()
 
-func on_elemental_hit(_element: String, hit_direction: int, dmg: int) -> void:
-	on_hit(hit_direction, dmg, true)
+func on_elemental_hit(_element: String, hit_direction: int, dmg: int, attacker: Node = null) -> void:
+	on_hit(hit_direction, dmg, true, attacker)

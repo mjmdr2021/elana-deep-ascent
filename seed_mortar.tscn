@@ -8,4 +8,4 @@ script = ExtResource("2_seed_mortar")
 max_hp = 25
 defense = 5
 fire_rate = 4.0
-xp_reward = 12
+xp_reward = 62

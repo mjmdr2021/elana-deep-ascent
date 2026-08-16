@@ -1,7 +1,7 @@
 extends CharacterBody2D
 
 @export var max_hp: int = 30
-@export var xp_reward: int = 10
+@export var xp_reward: int = 60
 @export var defense: int = 0
 @export var hp_regen: float = 0.0
 @export var deaggro_time: float = 2.0
@@ -90,7 +90,12 @@ func _process(delta: float) -> void:
 		visible = should_be_visible
 	if should_be_active != is_physics_processing():
 		set_physics_process(should_be_active)
-		hp_bar.visible = should_be_active and GameData.show_hp_bars
+		# Same "only while actually damaged" rule _update_hp_bar() enforces
+		# — this only needs to additionally handle should_be_active turning
+		# false (that function won't run again to hide it once physics
+		# processing stops), since re-activating just lets that function's
+		# own check take back over next tick anyway.
+		hp_bar.visible = should_be_active and GameData.show_hp_bars and hp < max_hp
 
 func _ready() -> void:
 	# skip_removed_check exempts dynamically-spawned enemies (Splitter's
@@ -242,7 +247,10 @@ func _update_zones() -> void:
 		_eye_glow.position.x = _eye_glow_base_x - EYE_GLOW_FLIP_SHIFT if direction < 0 else _eye_glow_base_x
 
 func _update_hp_bar() -> void:
-	hp_bar.visible = GameData.show_hp_bars
+	# Only shown while actually damaged — hides again once hp regenerates
+	# (or gets healed) back to full, rather than sitting on screen
+	# permanently at max. Still fully gated behind the dev toggle either way.
+	hp_bar.visible = GameData.show_hp_bars and hp < max_hp
 	hp_fill.size.x = clamp(float(hp) / float(max_hp), 0.0, 1.0) * hp_bg.size.x
 
 func apply_burn(damage_per_tick: int, ticks: int = 5) -> void:
@@ -310,8 +318,8 @@ func _tick_timers(delta: float) -> void:
 	elif hp_regen > 0.0 and hp > 0 and hp < max_hp:
 		hp = min(max_hp, hp + hp_regen * delta)
 
-func on_elemental_hit(element: String, hit_direction: int, damage: int) -> void:
-	$HitHandler.on_elemental_hit(element, hit_direction, damage)
+func on_elemental_hit(element: String, hit_direction: int, damage: int, attacker: Node = null) -> void:
+	$HitHandler.on_elemental_hit(element, hit_direction, damage, attacker)
 
-func on_hit(hit_direction: int, damage: int, is_magic: bool = false) -> void:
-	$HitHandler.on_hit(hit_direction, damage, is_magic)
+func on_hit(hit_direction: int, damage: int, is_magic: bool = false, attacker: Node = null) -> void:
+	$HitHandler.on_hit(hit_direction, damage, is_magic, attacker)

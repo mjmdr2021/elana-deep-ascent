@@ -8,5 +8,5 @@ script = ExtResource("2_healer_wisp")
 max_hp = 15
 defense = 0
 attack_damage = 0
-xp_reward = 10
+xp_reward = 60
 modulate = Color(0.5, 1.0, 0.6, 1)

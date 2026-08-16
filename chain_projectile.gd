@@ -127,8 +127,15 @@ func _process(delta: float) -> void:
 		if to_source.length() <= PULL_STOP_DIST:
 			_end_pull()
 			return
-		_pull_target.is_stunned = true
-		_pull_target._pending_knockback = to_source.normalized() * PULL_SPEED
+		# is_stunned/_pending_knockback are base_enemy.gd fields — not every
+		# "enemies"-group member declares them. blocks_chain_pull() (checked
+		# before _pulling is ever set true, in _on_area_entered()) is meant
+		# to keep anything without them from reaching this point at all, but
+		# guarding here too means a future enemy that forgets to implement
+		# it fails safe instead of erroring.
+		if "is_stunned" in _pull_target:
+			_pull_target.is_stunned = true
+			_pull_target._pending_knockback = to_source.normalized() * PULL_SPEED
 		return
 
 	if _hit:
@@ -167,7 +174,8 @@ func _compute_grapple_timer(hook_pos: Vector2) -> float:
 func _end_pull() -> void:
 	if is_instance_valid(_pull_target):
 		_pull_target.velocity.x = 0.0
-		_pull_target.is_stunned = false
+		if "is_stunned" in _pull_target:
+			_pull_target.is_stunned = false
 	_clear_remaining_segments()
 	queue_free()
 
@@ -185,7 +193,7 @@ func _on_area_entered(area: Area2D) -> void:
 			if target.has_method("on_chain_hit"):
 				target.on_chain_hit()
 			else:
-				target.on_hit(pull_dir, damage)
+				target.on_hit(pull_dir, damage, false, source)
 			GameData.glint_take_hit(GameData.get_weapon_hit_cost(true))
 			GameData.check_weapon_depletion()
 			# Generic hook — the hit above still lands (Shield-bearer's own

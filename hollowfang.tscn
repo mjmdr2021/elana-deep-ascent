@@ -1,0 +1,591 @@
+[gd_scene format=3 uid="uid://wxiiyy5a2b2h"]
+
+[ext_resource type="Script" uid="uid://bidtyd7s311oj" path="res://hollowfang.gd" id="1_hollowfang"]
+[ext_resource type="Script" uid="uid://ddcwi7fsank0a" path="res://hollowfang_head.gd" id="2_head"]
+[ext_resource type="Texture2D" uid="uid://tgwednpkl5d6" path="res://hollowFang-Initial-blocking.png" id="3_blocking_sprite"]
+[ext_resource type="Texture2D" uid="uid://dvg0jn65e10fd" path="res://hollowFang-BA.png" id="3_pir85"]
+[ext_resource type="Texture2D" uid="uid://ckvjemypsa1vw" path="res://hollowFang-Initial-blocking-2.png" id="4_blocking_sprite_2"]
+[ext_resource type="Texture2D" uid="uid://c78ffirrjga8" path="res://hollowFang-CA-1.png" id="4_outro"]
+[ext_resource type="Texture2D" uid="uid://dgske86iv82ut" path="res://hollowFang-CD-1.png" id="4_pq06m"]
+[ext_resource type="Texture2D" uid="uid://dt7si6g1o5nry" path="res://hollowFang-CA-2.png" id="5_pq06m"]
+[ext_resource type="Texture2D" uid="uid://b4urt6poorss" path="res://hollowFang-CD-2.png" id="5_w6lm2"]
+[ext_resource type="Texture2D" uid="uid://dfvvhpv3x0l2k" path="res://hollowFang-CA-3.png" id="6_w6lm2"]
+[ext_resource type="Texture2D" uid="uid://c1f8ww6a5xuns" path="res://hollowFang-TS.png" id="8_xv4mw"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_idle"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("3_blocking_sprite")
+}, {
+"duration": 10.0,
+"texture": ExtResource("3_pir85")
+}],
+"loop": true,
+"name": &"bite_attack",
+"speed": 4.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("3_blocking_sprite")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_pq06m")
+}, {
+"duration": 1.0,
+"texture": ExtResource("5_w6lm2")
+}],
+"loop": true,
+"name": &"cave_disruptor",
+"speed": 2.0
+}, {
+"frames": [{
+"duration": 3.0,
+"texture": ExtResource("4_outro")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_blocking_sprite")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_outro")
+}, {
+"duration": 3.0,
+"texture": ExtResource("5_pq06m")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_outro")
+}, {
+"duration": 1.0,
+"texture": ExtResource("5_pq06m")
+}, {
+"duration": 5.0,
+"texture": ExtResource("6_w6lm2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_outro")
+}, {
+"duration": 5.0,
+"texture": ExtResource("3_blocking_sprite")
+}],
+"loop": true,
+"name": &"charge_attack",
+"speed": 4.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("3_blocking_sprite")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_blocking_sprite_2")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 1.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("8_xv4mw")
+}],
+"loop": true,
+"name": &"tail_slam",
+"speed": 1.0
+}]
+
+[sub_resource type="Animation" id="Animation_pq06m"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("AnimatedSprite2D:animation")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [&"bite_attack"]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Hurtbox/CollisionPolygon2D:polygon")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [PackedVector2Array(-161.5, -39, -144, -48, -128, -56, -88, -64, -56, -64, -24, -56, 0, -48, 40, -32, 64, -16, 88, -8, 104, 0, 112, 0, 128, 0, 136, 0, 128, -16, 112, -40, 72, -88, 80, -120, 96, -136, 112, -144, 152, -120, 144, -104, 152, -88, 192, -56, 216, -32, 224, -16, 232, 8, 224, 16, 224, 24, 224, 40, 216, 56, 198.5, 63, 190.5, 63, 182.5, 63, 174.5, 63, 166.5, 63, 158.5, 63, 150.5, 63, 142.5, 63, 134.5, 63, 126.5, 63, 118.5, 63, 110.5, 63, 102.5, 63, 94.5, 63, 86.5, 63, 78.5, 63, 70.5, 63, 62.5, 63, 54.5, 63, 46.5, 63, 38.5, 63, 30.5, 63, 22.5, 63, 14.5, 63, 6.5, 63, -1.5, 63, -9.5, 63, -17.5, 63, -25.5, 63, -33.5, 63, -41.5, 63, -49.5, 63, -57.5, 63, -65.5, 63, -73.5, 63, -81.5, 63, -89.5, 63, -97.5, 63, -105.5, 63, -113.5, 63, -121.5, 63, -129.5, 63, -137.5, 63, -145.5, 63, -153.5, 63, -161.5, 63)]
+}
+
+[sub_resource type="Animation" id="Animation_hurtbox_bite_attack"]
+resource_name = "bite_attack"
+length = 2.75
+loop_mode = 1
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Hurtbox/CollisionPolygon2D:polygon")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.46666667, 0.48),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 1,
+"values": [PackedVector2Array(-161.5, -39, -144, -48, -128, -56, -88, -64, -56, -64, -24, -56, 0, -48, 40, -32, 64, -16, 88, -8, 104, 0, 112, 0, 128, 0, 136, 0, 128, -16, 112, -40, 72, -88, 80, -120, 96, -136, 112, -144, 152, -120, 144, -104, 152, -88, 192, -56, 216, -32, 224, -16, 232, 8, 224, 16, 224, 24, 224, 40, 216, 56, 198.5, 63, 190.5, 63, 182.5, 63, 174.5, 63, 166.5, 63, 158.5, 63, 150.5, 63, 142.5, 63, 134.5, 63, 126.5, 63, 118.5, 63, 110.5, 63, 102.5, 63, 94.5, 63, 86.5, 63, 78.5, 63, 70.5, 63, 62.5, 63, 54.5, 63, 46.5, 63, 38.5, 63, 30.5, 63, 22.5, 63, 14.5, 63, 6.5, 63, -1.5, 63, -9.5, 63, -17.5, 63, -25.5, 63, -33.5, 63, -41.5, 63, -49.5, 63, -57.5, 63, -65.5, 63, -73.5, 63, -81.5, 63, -89.5, 63, -97.5, 63, -105.5, 63, -113.5, 63, -121.5, 63, -129.5, 63, -137.5, 63, -145.5, 63, -153.5, 63, -161.5, 63), PackedVector2Array(-161.5, -39, -144, -48, -128, -56, -88, -64, -56, -64, -24, -56, 0, -48, 40, -32, 64, -16, 88, -8, 104, 0, 112, 0, 128, 0, 136, 0, 128, -16, 112, -40, 72, -88, 80, -120, 96, -136, 112, -144, 152, -120, 144, -104, 152, -88, 192, -56, 216, -32, 224, -16, 232, 8, 224, 16, 224, 24, 224, 40, 216, 56, 198.5, 63, 190.5, 63, 182.5, 63, 174.5, 63, 166.5, 63, 158.5, 63, 150.5, 63, 142.5, 63, 134.5, 63, 126.5, 63, 118.5, 63, 110.5, 63, 102.5, 63, 94.5, 63, 86.5, 63, 78.5, 63, 70.5, 63, 62.5, 63, 54.5, 63, 46.5, 63, 38.5, 63, 30.5, 63, 22.5, 63, 14.5, 63, 6.5, 63, -1.5, 63, -9.5, 63, -17.5, 63, -25.5, 63, -33.5, 63, -41.5, 63, -49.5, 63, -57.5, 63, -65.5, 63, -73.5, 63, -81.5, 63, -89.5, 63, -97.5, 63, -105.5, 63, -113.5, 63, -121.5, 63, -129.5, 63, -137.5, 63, -145.5, 63, -153.5, 63, -161.5, 63), PackedVector2Array(-161.5, -39, -144, -48, -128, -56, -88, -64, -56, -64, -24, -56, 0, -48, 40, -32, 64, -16, 80, -16, 96, -24, 104, -32, 112, -40, 120, -48, 120, -64, 128, -80, 136, -112, 192, -152, 232, -144, 272, -120, 288, -72, 280, -24, 248, -8, 216, -56, 192, -56, 184, -24, 184, 0, 176, 8, 168, 24, 152, 32, 144, 40, 128, 48, 48, 56, 32, 56, 24, 56, 16, 56, 6.5, 63, -1.5, 63, -9.5, 63, -17.5, 63, -25.5, 63, -33.5, 63, -41.5, 63, -49.5, 63, -57.5, 63, -65.5, 63, -73.5, 63, -81.5, 63, -89.5, 63, -97.5, 63, -105.5, 63, -113.5, 63, -121.5, 63, -129.5, 63, -137.5, 63, -145.5, 63, -153.5, 63, -161.5, 63)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("AnimatedSprite2D:frame")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.25),
+"transitions": PackedFloat32Array(1, 1),
+"update": 1,
+"values": [0, 1]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("AnimatedSprite2D:animation")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [&"bite_attack"]
+}
+
+[sub_resource type="Animation" id="Animation_hurtbox_cave_disruptor"]
+resource_name = "cave_disruptor"
+length = 1.5
+loop_mode = 1
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Hurtbox/CollisionPolygon2D:polygon")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [PackedVector2Array(-161.5, -39, -144, -48, -128, -56, -88, -64, -56, -64, -24, -56, 0, -48, 40, -32, 64, -16, 88, -8, 104, 0, 112, 0, 128, 0, 136, 0, 128, -16, 112, -40, 72, -88, 80, -120, 96, -136, 112, -144, 152, -120, 144, -104, 152, -88, 192, -56, 216, -32, 224, -16, 232, 8, 224, 16, 224, 24, 224, 40, 216, 56, 198.5, 63, 190.5, 63, 182.5, 63, 174.5, 63, 166.5, 63, 158.5, 63, 150.5, 63, 142.5, 63, 134.5, 63, 126.5, 63, 118.5, 63, 110.5, 63, 102.5, 63, 94.5, 63, 86.5, 63, 78.5, 63, 70.5, 63, 62.5, 63, 54.5, 63, 46.5, 63, 38.5, 63, 30.5, 63, 22.5, 63, 14.5, 63, 6.5, 63, -1.5, 63, -9.5, 63, -17.5, 63, -25.5, 63, -33.5, 63, -41.5, 63, -49.5, 63, -57.5, 63, -65.5, 63, -73.5, 63, -81.5, 63, -89.5, 63, -97.5, 63, -105.5, 63, -113.5, 63, -121.5, 63, -129.5, 63, -137.5, 63, -145.5, 63, -153.5, 63, -161.5, 63)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("AnimatedSprite2D:frame")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.5, 1),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 1,
+"values": [0, 1, 2]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("AnimatedSprite2D:animation")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [&"cave_disruptor"]
+}
+
+[sub_resource type="Animation" id="Animation_hurtbox_charge_attack"]
+resource_name = "charge_attack"
+length = 5.25
+loop_mode = 1
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Hurtbox/CollisionPolygon2D:polygon")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [PackedVector2Array(-161.5, -39, -144, -48, -128, -56, -88, -64, -56, -64, -24, -56, 0, -48, 40, -32, 64, -16, 88, -8, 104, 0, 112, 0, 128, 0, 136, 0, 128, -16, 112, -40, 72, -88, 80, -120, 96, -136, 112, -144, 152, -120, 144, -104, 152, -88, 192, -56, 216, -32, 224, -16, 232, 8, 224, 16, 224, 24, 224, 40, 216, 56, 198.5, 63, 190.5, 63, 182.5, 63, 174.5, 63, 166.5, 63, 158.5, 63, 150.5, 63, 142.5, 63, 134.5, 63, 126.5, 63, 118.5, 63, 110.5, 63, 102.5, 63, 94.5, 63, 86.5, 63, 78.5, 63, 70.5, 63, 62.5, 63, 54.5, 63, 46.5, 63, 38.5, 63, 30.5, 63, 22.5, 63, 14.5, 63, 6.5, 63, -1.5, 63, -9.5, 63, -17.5, 63, -25.5, 63, -33.5, 63, -41.5, 63, -49.5, 63, -57.5, 63, -65.5, 63, -73.5, 63, -81.5, 63, -89.5, 63, -97.5, 63, -105.5, 63, -113.5, 63, -121.5, 63, -129.5, 63, -137.5, 63, -145.5, 63, -153.5, 63, -161.5, 63)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("AnimatedSprite2D:frame")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.75, 1, 1.25, 2, 2.25, 2.5, 3.75, 4),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1, 1, 1),
+"update": 1,
+"values": [0, 1, 2, 3, 4, 5, 6, 7, 8]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("AnimatedSprite2D:animation")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [&"charge_attack"]
+}
+
+[sub_resource type="Animation" id="Animation_hurtbox_idle"]
+resource_name = "idle"
+length = 2.0
+loop_mode = 1
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Hurtbox/CollisionPolygon2D:polygon")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [PackedVector2Array(-161.5, -39, -144, -48, -128, -56, -88, -64, -56, -64, -24, -56, 0, -48, 40, -32, 64, -16, 88, -8, 104, 0, 112, 0, 128, 0, 136, 0, 128, -16, 112, -40, 72, -88, 80, -120, 96, -136, 112, -144, 152, -120, 144, -104, 152, -88, 192, -56, 216, -32, 224, -16, 232, 8, 224, 16, 224, 24, 224, 40, 216, 56, 198.5, 63, 190.5, 63, 182.5, 63, 174.5, 63, 166.5, 63, 158.5, 63, 150.5, 63, 142.5, 63, 134.5, 63, 126.5, 63, 118.5, 63, 110.5, 63, 102.5, 63, 94.5, 63, 86.5, 63, 78.5, 63, 70.5, 63, 62.5, 63, 54.5, 63, 46.5, 63, 38.5, 63, 30.5, 63, 22.5, 63, 14.5, 63, 6.5, 63, -1.5, 63, -9.5, 63, -17.5, 63, -25.5, 63, -33.5, 63, -41.5, 63, -49.5, 63, -57.5, 63, -65.5, 63, -73.5, 63, -81.5, 63, -89.5, 63, -97.5, 63, -105.5, 63, -113.5, 63, -121.5, 63, -129.5, 63, -137.5, 63, -145.5, 63, -153.5, 63, -161.5, 63)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("AnimatedSprite2D:frame")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 1),
+"transitions": PackedFloat32Array(1, 1),
+"update": 1,
+"values": [0, 1]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("AnimatedSprite2D:animation")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [&"idle"]
+}
+
+[sub_resource type="Animation" id="Animation_hurtbox_tail_slam"]
+resource_name = "tail_slam"
+loop_mode = 1
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Hurtbox/CollisionPolygon2D:polygon")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [PackedVector2Array(-161.5, -39, -144, -48, -128, -56, -88, -64, -56, -64, -24, -56, 0, -48, 40, -32, 64, -16, 88, -8, 104, 0, 112, 0, 128, 0, 136, 0, 128, -16, 112, -40, 72, -88, 80, -120, 96, -136, 112, -144, 152, -120, 144, -104, 152, -88, 192, -56, 216, -32, 224, -16, 232, 8, 224, 16, 224, 24, 224, 40, 216, 56, 198.5, 63, 190.5, 63, 182.5, 63, 174.5, 63, 166.5, 63, 158.5, 63, 150.5, 63, 142.5, 63, 134.5, 63, 126.5, 63, 118.5, 63, 110.5, 63, 102.5, 63, 94.5, 63, 86.5, 63, 78.5, 63, 70.5, 63, 62.5, 63, 54.5, 63, 46.5, 63, 38.5, 63, 30.5, 63, 22.5, 63, 14.5, 63, 6.5, 63, -1.5, 63, -9.5, 63, -17.5, 63, -25.5, 63, -33.5, 63, -41.5, 63, -49.5, 63, -57.5, 63, -65.5, 63, -73.5, 63, -81.5, 63, -89.5, 63, -97.5, 63, -105.5, 63, -113.5, 63, -121.5, 63, -129.5, 63, -137.5, 63, -145.5, 63, -153.5, 63, -161.5, 63)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("AnimatedSprite2D:frame")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [0]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("AnimatedSprite2D:animation")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [&"tail_slam"]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_hurtbox"]
+_data = {
+&"RESET": SubResource("Animation_pq06m"),
+&"bite_attack": SubResource("Animation_hurtbox_bite_attack"),
+&"cave_disruptor": SubResource("Animation_hurtbox_cave_disruptor"),
+&"charge_attack": SubResource("Animation_hurtbox_charge_attack"),
+&"idle": SubResource("Animation_hurtbox_idle"),
+&"tail_slam": SubResource("Animation_hurtbox_tail_slam")
+}
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_head_hurt"]
+size = Vector2(110, 110)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_spit_trigger"]
+size = Vector2(184, 197)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_tail_hit"]
+size = Vector2(300, 48)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_tail_trigger"]
+size = Vector2(296, 62)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_charge_trigger"]
+size = Vector2(256, 63)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_eject_trigger"]
+size = Vector2(280, 136)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_cave_arena"]
+size = Vector2(342, 216)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_camera_bounds"]
+size = Vector2(584, 360)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_spiky"]
+size = Vector2(20, 56)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_spiky2"]
+size = Vector2(152, 169)
+
+[node name="Hollowfang" type="CharacterBody2D" unique_id=1386973724]
+collision_layer = 3
+script = ExtResource("1_hollowfang")
+max_hp = 2000
+xp_reward = 2050
+bite_damage = 30
+charge_bite_damage = 17
+tail_damage = 31
+spike_damage = 23
+spike_count = 6
+attack_cooldown_time = 1.0
+
+[node name="CollisionShape2D" type="CollisionPolygon2D" parent="." unique_id=1958671334]
+polygon = PackedVector2Array(-161.5, -39, -144, -48, -128, -56, -88, -64, -56, -64, -24, -56, 0, -48, 40, -32, 64, -16, 88, -8, 104, 0, 112, 0, 128, 0, 136, 0, 128, -16, 112, -40, 72, -88, 80, -120, 72, -136, 128, -136, 152, -120, 144, -104, 152, -88, 192, -56, 216, -32, 224, -16, 232, 8, 224, 16, 224, 24, 224, 40, 216, 56, 198.5, 63, -161.5, 63)
+
+[node name="BodyVisual" type="ColorRect" parent="." unique_id=793699064]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -144.0
+offset_top = -112.0
+offset_right = 240.0
+offset_bottom = 64.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.15, 0.3, 0.12, 1)
+
+[node name="BlockingSprite" type="Sprite2D" parent="." unique_id=1400000025]
+visible = false
+position = Vector2(224, -48)
+texture = ExtResource("3_blocking_sprite")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1400000026]
+position = Vector2(224, -48)
+sprite_frames = SubResource("SpriteFrames_idle")
+animation = &"bite_attack"
+autoplay = "idle"
+
+[node name="CollisionAnimationPlayer" type="AnimationPlayer" parent="." unique_id=895035175]
+libraries/ = SubResource("AnimationLibrary_hurtbox")
+
+[node name="Hurtbox" type="Area2D" parent="." unique_id=390994476]
+collision_layer = 4
+collision_mask = 0
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Hurtbox" unique_id=655803616]
+polygon = PackedVector2Array(-161.5, -39, -144, -48, -128, -56, -88, -64, -56, -64, -24, -56, 0, -48, 40, -32, 64, -16, 88, -8, 104, 0, 112, 0, 128, 0, 136, 0, 128, -16, 112, -40, 72, -88, 80, -120, 96, -136, 112, -144, 152, -120, 144, -104, 152, -88, 192, -56, 216, -32, 224, -16, 232, 8, 224, 16, 224, 24, 224, 40, 216, 56, 198.5, 63, 190.5, 63, 182.5, 63, 174.5, 63, 166.5, 63, 158.5, 63, 150.5, 63, 142.5, 63, 134.5, 63, 126.5, 63, 118.5, 63, 110.5, 63, 102.5, 63, 94.5, 63, 86.5, 63, 78.5, 63, 70.5, 63, 62.5, 63, 54.5, 63, 46.5, 63, 38.5, 63, 30.5, 63, 22.5, 63, 14.5, 63, 6.5, 63, -1.5, 63, -9.5, 63, -17.5, 63, -25.5, 63, -33.5, 63, -41.5, 63, -49.5, 63, -57.5, 63, -65.5, 63, -73.5, 63, -81.5, 63, -89.5, 63, -97.5, 63, -105.5, 63, -113.5, 63, -121.5, 63, -129.5, 63, -137.5, 63, -145.5, 63, -153.5, 63, -161.5, 63)
+
+[node name="Head" type="Node2D" parent="." unique_id=1194107116]
+position = Vector2(184, -88)
+script = ExtResource("2_head")
+
+[node name="HeadVisual" type="ColorRect" parent="Head" unique_id=279325197]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -55.0
+offset_top = -55.0
+offset_right = 55.0
+offset_bottom = 55.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.54901963, 0.14901961, 0.14901961, 0.60784316)
+
+[node name="Hurtbox" type="Area2D" parent="Head" unique_id=983703937]
+collision_layer = 4
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Head/Hurtbox" unique_id=1126185384]
+shape = SubResource("RectangleShape2D_head_hurt")
+
+[node name="BiteZone" type="Area2D" parent="Head" unique_id=1400000003]
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Head/BiteZone" unique_id=1400000004]
+shape = SubResource("RectangleShape2D_head_hurt")
+
+[node name="ElecTarget1" type="Marker2D" parent="Head" unique_id=1400000027]
+position = Vector2(32, -40)
+
+[node name="ElecTarget3" type="Marker2D" parent="Head" unique_id=1400000029]
+position = Vector2(48, 0)
+
+[node name="HeadCollision" type="StaticBody2D" parent="Head" unique_id=1400000030]
+collision_layer = 3
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Head/HeadCollision" unique_id=1400000031]
+polygon = PackedVector2Array(-24, -64, 16, -48, 32, -56, 56, 0, 32, 40, -55, 55, -88, -64)
+
+[node name="BiteTriggerZone" type="Area2D" parent="." unique_id=1400000001]
+position = Vector2(315, -23)
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="BiteTriggerZone" unique_id=1400000002]
+position = Vector2(-43, -13)
+polygon = PackedVector2Array(-56, -50, -56, -92, 48, 20, 24, 100, -40, 100, -56, 50)
+
+[node name="SpitTriggerZone" type="Area2D" parent="." unique_id=1400000005]
+position = Vector2(500, -23)
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="SpitTriggerZone" unique_id=1400000006]
+position = Vector2(-40, -11.5)
+shape = SubResource("RectangleShape2D_spit_trigger")
+
+[node name="Tail" type="Node2D" parent="." unique_id=1400000007]
+position = Vector2(20, 0)
+
+[node name="TailVisual" type="ColorRect" parent="Tail" unique_id=1400000008]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -292.0
+offset_top = -24.0
+offset_bottom = 24.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.1, 0.22, 0.09, 1)
+
+[node name="TailHitZone" type="Area2D" parent="Tail" unique_id=1400000011]
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Tail/TailHitZone" unique_id=1400000012]
+position = Vector2(-150, 0)
+shape = SubResource("RectangleShape2D_tail_hit")
+
+[node name="TailSlamTriggerZone" type="Area2D" parent="." unique_id=1400000009]
+position = Vector2(-180, 0)
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="TailSlamTriggerZone" unique_id=1400000010]
+position = Vector2(592, 31)
+shape = SubResource("RectangleShape2D_tail_trigger")
+
+[node name="WarnFlash" type="ColorRect" parent="TailSlamTriggerZone" unique_id=1400000024]
+visible = false
+offset_left = 444.0
+offset_right = 740.0
+offset_bottom = 62.0
+mouse_filter = 2
+color = Color(1, 0, 0, 0.45)
+
+[node name="ChargeBiteTriggerZone" type="Area2D" parent="." unique_id=1400000013]
+position = Vector2(700, -23)
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ChargeBiteTriggerZone" unique_id=1400000014]
+position = Vector2(-260, -65)
+shape = SubResource("RectangleShape2D_charge_trigger")
+
+[node name="EjectSpikesTriggerZone" type="Area2D" parent="." unique_id=1400000015]
+position = Vector2(48, -23)
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="EjectSpikesTriggerZone" unique_id=1400000016]
+position = Vector2(364, -29)
+shape = SubResource("RectangleShape2D_eject_trigger")
+
+[node name="CaveDisruptorArenaZone" type="Area2D" parent="." unique_id=1400000017]
+position = Vector2(400, -40)
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="CaveDisruptorArenaZone" unique_id=1400000018]
+shape = SubResource("RectangleShape2D_cave_arena")
+
+[node name="CameraBoundsZone" type="Area2D" parent="." unique_id=1400000022]
+position = Vector2(312, -40)
+collision_layer = 0
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="CameraBoundsZone" unique_id=1400000023]
+position = Vector2(28, -12)
+shape = SubResource("RectangleShape2D_camera_bounds")
+
+[node name="ElecTarget2" type="Marker2D" parent="." unique_id=1400000028]
+position = Vector2(192, -48)
+
+[node name="ElecTarget4" type="Marker2D" parent="." unique_id=618366311]
+position = Vector2(224, -16)
+
+[node name="ElecTarget5" type="Marker2D" parent="." unique_id=1849021071]
+position = Vector2(216, 32)
+
+[node name="SpikyZone" type="Area2D" parent="." unique_id=815245966]
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="SpikyZone" unique_id=727408525]
+position = Vector2(215, 36)
+shape = SubResource("RectangleShape2D_spiky")
+
+[node name="SpikyZone2" type="Area2D" parent="." unique_id=717789932]
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="SpikyZone2" unique_id=979560440]
+position = Vector2(148, -76.5)
+shape = SubResource("RectangleShape2D_spiky2")
+
+[node name="HPBar" type="Node2D" parent="." unique_id=210273340]
+position = Vector2(-60, -210)
+
+[node name="Background" type="ColorRect" parent="HPBar" unique_id=1714380124]
+offset_right = 120.0
+offset_bottom = 8.0
+color = Color(0.18862307, 0.19213569, 0.18689519, 1)
+
+[node name="Fill" type="ColorRect" parent="HPBar" unique_id=105320599]
+offset_right = 120.0
+offset_bottom = 8.0
+color = Color(0.7, 0.1, 0.15, 1)

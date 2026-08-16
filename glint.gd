@@ -158,6 +158,11 @@ func _process_scouting(delta: float) -> void:
 			global_position = elana.global_position
 			GameData.glint_scouting = false
 			GameData.glint_scout_returning = false
+			# Reverts to fist the normal way if the 2/sec scouting drain
+			# (elana.gd's _tick_scout_weapon_drain()) actually emptied her
+			# weapon's HP during the trip — no-op otherwise, leaving
+			# whatever weapon she had equipped intact.
+			GameData.check_weapon_depletion()
 			elana.get_node("Camera").make_current()
 		else:
 			global_position += to_elana.normalized() * SCOUT_RETURN_SPEED * delta

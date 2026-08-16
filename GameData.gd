@@ -77,6 +77,13 @@ const RESPEC_REGISTRY = {
 	"respecGlint": "glint",
 }
 
+# Collectibles with no quickslot effect — lore notes and future key items.
+# _use_selected_item() (hud.gd) checks this and no-ops a click rather than
+# consuming/removing one if it's ever dragged into a quickslot manually.
+const KEY_ITEM_REGISTRY = {
+	"note1": true,
+}
+
 # ── Elana Skill Tree ─────────────────────────────────────────────────────────
 # type: "stat" (1 SP unlocks path, incremental effect)
 #       "passive" (1 SP unlocks path, effect not yet implemented)
@@ -111,13 +118,13 @@ const SKILL_TREE_DATA: Dictionary = {
 	"elemental_potency":         { "name": "Elemental Potency",         "type": "stat",    "path": 3, "max_level": 3, "prereq": "herb_mastery",    "desc": "+10% elemental proj dmg/lvl" },
 	"casting_speed":      { "name": "Casting Speed",      "type": "stat",    "path": 3, "max_level": 3, "prereq": "elemental_potency",       "desc": "+15% cast speed/lvl" },
 	"double_cast":        { "name": "Double Cast",        "type": "passive",  "path": 3, "max_level": 3, "prereq": "casting_speed",    "desc": "2nd proj at 40/70/100% dmg" },
-	"ice_potency":        { "name": "Ice Potency",        "type": "stat",    "path": 3, "max_level": 3, "prereq": "elemental_potency",       "desc": "+10% ice dmg/lvl" },
+	"ice_potency":        { "name": "Ice Potency",        "type": "stat",    "path": 3, "max_level": 3, "prereq": "elemental_potency",       "desc": "+10% ice dmg & resist/lvl" },
 	"freeze":             { "name": "Freeze",             "type": "passive",  "path": 3, "max_level": 3, "prereq": "ice_potency",      "desc": "+15% freeze chance/lvl" },
 	"shield_wall_skill":  { "name": "★ Shield Wall",     "type": "skill",   "path": 3, "max_level": 1, "prereq": "freeze",           "desc": "Summon ice wall (Frost Herb)" },
-	"fire_potency":       { "name": "Fire Potency",       "type": "stat",    "path": 3, "max_level": 3, "prereq": "elemental_potency",       "desc": "+10% fire dmg/lvl" },
+	"fire_potency":       { "name": "Fire Potency",       "type": "stat",    "path": 3, "max_level": 3, "prereq": "elemental_potency",       "desc": "+10% fire dmg & resist/lvl" },
 	"burn":               { "name": "Burn",               "type": "passive",  "path": 3, "max_level": 3, "prereq": "fire_potency",     "desc": "+20% burn DoT dmg/lvl" },
 	"fire_blast_skill":   { "name": "★ Fire Blast",      "type": "skill",   "path": 3, "max_level": 1, "prereq": "burn",             "desc": "AOE knockback blast (Fire Herb)" },
-	"lightning_potency":  { "name": "Lightning Potency",  "type": "stat",    "path": 3, "max_level": 3, "prereq": "elemental_potency",       "desc": "+10% lightning dmg/lvl" },
+	"lightning_potency":  { "name": "Lightning Potency",  "type": "stat",    "path": 3, "max_level": 3, "prereq": "elemental_potency",       "desc": "+10% lightning dmg & resist/lvl" },
 	"chain_lightning":    { "name": "Chain Lightning",    "type": "stat",    "path": 3, "max_level": 3, "prereq": "lightning_potency","desc": "+1 chain target/lvl (70% dmg)" },
 	"storm_skill":        { "name": "★ Storm",           "type": "skill",   "path": 3, "max_level": 1, "prereq": "chain_lightning",  "desc": "Continuous lightning (Elec Herb)" },
 	# Power path (4)
@@ -276,6 +283,10 @@ var respawn_position: Vector2 = Vector2.ZERO
 var just_died = false
 var default_scene = "res://full_map.tscn"
 var default_spawn_id = "SpawnDefault"
+# Set by title_screen.gd right before switching to loading_screen.tscn — the
+# path loading_screen.gd should threaded-load and switch to next. Not saved
+# (transient hand-off only, cleared the instant loading_screen.gd reads it).
+var pending_scene_load: String = ""
 var use_default_spawn = false
 var wall_jump_enabled = false
 var double_jump_enabled = false
@@ -285,12 +296,46 @@ var hollowscale_unlocked = false  # Blessing #1 — +armor, one-hit ward on a fl
 var hollowscale_cooldown: float = 0.0
 const HOLLOWSCALE_ARMOR_BONUS: int = 15
 const HOLLOWSCALE_RECHARGE: float = 10.0
+# Ant Queen mini-boss reward — halves incoming damage from anything tagged
+# "hazards" (see elana.gd's take_damage()). Not part of the mandatory-boss
+# Blessing track, just a permanent flag set on her on_death().
+var ant_queen_defeated = false
+const HAZARD_DAMAGE_REDUCTION: float = 0.5
 var dev_no_cooldowns = false  # Dev toggle — forces every cooldown to stay at 0 while on
 var dev_fixed_zoom_1x = false  # Dev toggle — locks camera to 1x zoom instead of the dynamic system
 var screen_shake_enabled = true  # Dev toggle — heavy hits/impacts shake the camera
 # Overrides the normal per-action camera zoom to a fixed wide arena view once
-# set — intentionally has no auto-clear; a boss-defeated trigger turns it off.
+# set — no auto-clear; reset_boss_camera() (called on boss death or player
+# respawn) turns it off.
 var boss_zoom_active: bool = false
+# True while the camera should stay clamped to camera_bounds instead of
+# following Elana without limit (elana.gd reads this every frame — see
+# _update_camera_lock()) — set alongside boss_zoom_active by the boss-arena
+# reveal cutscene, cleared the same way. A plain bool, not a Node reference —
+# nothing ever reads the boss's own position/transform off it, it's purely
+# a presence gate.
+var camera_locked: bool = false
+# World-space rect the camera is clamped to while camera_locked is true —
+# still follows Elana normally moment to moment, just can't drift the view
+# past these bounds. An empty Rect2() (size == Vector2.ZERO) means no bounds
+# were provided (e.g. a future boss without get_camera_bounds()) — leave
+# whatever limits are already applied rather than clamping to a single point.
+var camera_bounds: Rect2 = Rect2()
+# True only while dialog_marker.gd's CAMERA_PAN cutscene tween is actively
+# animating camera_offset_base — elana.gd's _update_camera_lock() stays
+# fully hands-off while this is true so it can't fight the tween.
+var camera_pan_active: bool = false
+
+# Shared reset for the boss-arena camera override — called from both
+# hollowfang.gd's _die() and elana.gd's die()/respawn path, so however the
+# encounter ends, the camera always returns to normal. Also called from the
+# full-game reset() below, so a reset mid-cutscene can't leave stale bounds
+# or a stuck camera_pan_active behind.
+func reset_boss_camera() -> void:
+	boss_zoom_active = false
+	camera_locked = false
+	camera_bounds = Rect2()
+	camera_pan_active = false
 
 # Glint independent scouting — she detaches to roam/light the way ahead while
 # Elana stands frozen (but still damageable). glint_scouting covers the whole
@@ -327,7 +372,9 @@ var stone_being_met: bool = false
 var received_stone_being_power: bool = false
 # Set once the Glint-scout (X) tutorial at the dialog_marker has played.
 var glint_scout_tutorial_done: bool = false
-# Set once the camera-pan dialog_marker (DialogMarker2) has played.
+# Set once the air dash dialog_marker (AIR_DASH_TUTORIAL) has played.
+var air_dash_tutorial_done: bool = false
+# Set once the camera-pan dialog_marker (Boss1NormalEntranceCutscene) has played.
 var camera_pan_intro_done: bool = false
 # One-shot world-object interaction hints ("E to pickup" / "Hit to break"),
 # shown on whichever herb/ore node has its own show_pickup_hint/
@@ -648,6 +695,21 @@ func add_item(item_id: String) -> bool:
 			return true
 	return false
 
+# Inventory-only variant of add_item() — for pickups that should never land
+# in a quickslot in the first place (lore notes, future key items), instead
+# of relying on the quickslots-happen-to-be-full fallthrough add_item() uses.
+func add_item_to_inventory(item_id: String) -> bool:
+	for slot in inventory_slots:
+		if slot["item"] == item_id and slot["count"] < MAX_STACK:
+			slot["count"] += 1
+			return true
+	for slot in inventory_slots:
+		if slot["item"] == "":
+			slot["item"] = item_id
+			slot["count"] = 1
+			return true
+	return false
+
 # Fully clears the given tree: refunds every invested SP, reverses every
 # stat those levels granted, and resets max_hp by exactly what Vitality
 # contributed (not a hard reset — leveling's own +5/level must survive).
@@ -913,6 +975,7 @@ func reset() -> void:
 	clear_combat_stacks()
 	elemander_pads_unlocked = false
 	golden_cloak_unlocked = false
+	ant_queen_defeated = false
 	hollowscale_unlocked = false
 	hollowscale_cooldown = 0.0
 	danger_sense_unlocked = false
@@ -923,8 +986,9 @@ func reset() -> void:
 	stone_being_met = false
 	received_stone_being_power = false
 	glint_scout_tutorial_done = false
+	air_dash_tutorial_done = false
 	camera_pan_intro_done = false
-	boss_zoom_active = false
+	reset_boss_camera()
 	herb_pickup_hint_shown = false
 	ore_break_hint_shown = false
 	glint_scout_return_hint_shown = false
@@ -953,6 +1017,7 @@ func save_game() -> void:
 		"elemander_pads_unlocked": elemander_pads_unlocked,
 		"golden_cloak_unlocked": golden_cloak_unlocked,
 		"hollowscale_unlocked": hollowscale_unlocked,
+		"ant_queen_defeated": ant_queen_defeated,
 		"danger_sense_unlocked": danger_sense_unlocked,
 		"spawn_point_id": spawn_point_id, "respawn_scene": respawn_scene,
 		"respawn_position": [respawn_position.x, respawn_position.y],
@@ -962,6 +1027,7 @@ func save_game() -> void:
 		"stone_being_met": stone_being_met,
 		"received_stone_being_power": received_stone_being_power,
 		"glint_scout_tutorial_done": glint_scout_tutorial_done,
+		"air_dash_tutorial_done": air_dash_tutorial_done,
 		"camera_pan_intro_done": camera_pan_intro_done,
 		"herb_pickup_hint_shown": herb_pickup_hint_shown,
 		"ore_break_hint_shown": ore_break_hint_shown,
@@ -1002,6 +1068,7 @@ func load_game() -> bool:
 	elemander_pads_unlocked = parsed.get("elemander_pads_unlocked", elemander_pads_unlocked)
 	golden_cloak_unlocked = parsed.get("golden_cloak_unlocked", golden_cloak_unlocked)
 	hollowscale_unlocked = parsed.get("hollowscale_unlocked", hollowscale_unlocked)
+	ant_queen_defeated = parsed.get("ant_queen_defeated", ant_queen_defeated)
 	danger_sense_unlocked = parsed.get("danger_sense_unlocked", danger_sense_unlocked)
 	spawn_point_id = parsed.get("spawn_point_id", spawn_point_id)
 	respawn_scene = parsed.get("respawn_scene", respawn_scene)
@@ -1017,6 +1084,7 @@ func load_game() -> bool:
 	stone_being_met = parsed.get("stone_being_met", stone_being_met)
 	received_stone_being_power = parsed.get("received_stone_being_power", received_stone_being_power)
 	glint_scout_tutorial_done = parsed.get("glint_scout_tutorial_done", glint_scout_tutorial_done)
+	air_dash_tutorial_done = parsed.get("air_dash_tutorial_done", air_dash_tutorial_done)
 	camera_pan_intro_done = parsed.get("camera_pan_intro_done", camera_pan_intro_done)
 	herb_pickup_hint_shown = parsed.get("herb_pickup_hint_shown", herb_pickup_hint_shown)
 	ore_break_hint_shown = parsed.get("ore_break_hint_shown", ore_break_hint_shown)
@@ -1101,6 +1169,14 @@ func make_stun_indicator() -> Label:
 	label.add_theme_color_override("font_color", Color(1.0, 1.0, 0.2))
 	return label
 
+# Same-frame handoff, not saved: elana.gd's crit-rolling functions set this
+# explicitly (true or false) right before calling enemy.on_hit(), and
+# hit_handler.gd's _apply_damage() reads-and-clears it the instant it spawns
+# the resulting damage number — narrower than threading an is_crit param
+# through every on_hit()/on_elemental_hit() implementer project-wide.
+var last_hit_is_crit: bool = false
+const CRIT_DAMAGE_COLOR: Color = Color(1.0, 0.9, 0.15)
+
 func spawn_damage_number(amount: int, pos: Vector2, color: Color = Color.WHITE) -> void:
 	spawn_float_text(str(amount), pos, color)
 
@@ -1127,6 +1203,20 @@ func is_removed(scene_path: String, node_name: String) -> bool:
 	if not room_state.has(scene_path):
 		return false
 	return room_state[scene_path].has(node_name)
+
+# Reuses room_state's existing per-scene/per-node dict (same one is_removed/
+# mark_removed use, namespaced with a prefix so it can't collide with an
+# ordinary "destroyed" entry) — rolled once per node, cached here so
+# re-entering the room doesn't re-roll it, cleared on reset() (New Game)
+# same as everything else room_state tracks, and persists across Continue
+# since room_state is already part of the save data.
+func get_random_choice(scene_path: String, node_name: String, choice_count: int) -> int:
+	if not room_state.has(scene_path):
+		room_state[scene_path] = {}
+	var key = "RandomChoice::" + node_name
+	if not room_state[scene_path].has(key):
+		room_state[scene_path][key] = randi() % choice_count
+	return room_state[scene_path][key]
 
 # Per-shop-instance purchase counters (e.g. Moleman's limited ore/herb stock).
 # Persists across trade sessions, doesn't replenish.

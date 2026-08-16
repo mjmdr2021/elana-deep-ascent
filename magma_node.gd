@@ -19,11 +19,11 @@ func _on_contact_entered(body: Node) -> void:
 	if body.is_in_group("player") and body.has_method("apply_player_burn"):
 		body.apply_player_burn(burn_damage_per_tick, burn_ticks)
 
-func on_elemental_hit(element: String, hit_direction: int, damage: int) -> void:
+func on_elemental_hit(element: String, hit_direction: int, damage: int, attacker: Node = null) -> void:
 	var mult = 2.0 if element == "frost" else 1.0
-	on_hit(hit_direction, int(damage * mult), true)
+	on_hit(hit_direction, int(damage * mult), true, attacker)
 
-func on_hit(_hit_direction: int, damage: int, _is_magic: bool = false) -> void:
+func on_hit(_hit_direction: int, damage: int, _is_magic: bool = false, _attacker: Node = null) -> void:
 	if hp <= 0:
 		return
 	hp -= damage

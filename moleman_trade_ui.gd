@@ -29,6 +29,7 @@ var _offered_items: Dictionary = {}  # item_id -> count, reserved from player in
 func _ready() -> void:
 	_trade_button.pressed.connect(_on_trade_pressed)
 	_close_button.pressed.connect(func(): get_parent().queue_free())
+	add_to_group("moleman_trade_ui")
 
 func open(moleman: Node) -> void:
 	_moleman = moleman

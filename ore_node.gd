@@ -4,13 +4,16 @@ extends StaticBody2D
 # — OreType maps 1:1 to GameData.ORE_REGISTRY's keys, translated in
 # drop_ores() so the rest of the game (inventory, shop, GameData) is
 # untouched and keeps using the existing item ID strings.
-enum OreType { SWORD, CHAIN_CLAW, SPEAR, WARHAMMER }
+enum OreType { SWORD, CHAIN_CLAW, SPEAR, WARHAMMER, RANDOM }
 const ORE_TYPE_IDS: Dictionary = {
 	OreType.SWORD: "ore1",
 	OreType.CHAIN_CLAW: "ore2",
 	OreType.SPEAR: "ore3",
 	OreType.WARHAMMER: "ore4",
 }
+# SWORD..WARHAMMER only — RANDOM itself isn't a real drop type, just a
+# selector resolved once in _ready().
+const RANDOM_CHOICE_COUNT: int = 4
 
 @export var ore_type: OreType = OreType.SWORD
 # Set true on exactly one ore node (whichever Elana meets first) to show a
@@ -28,6 +31,13 @@ func _ready():
 	if GameData.is_removed(get_tree().current_scene.scene_file_path, name):
 		queue_free()
 		return
+	# Rolled once (cached in GameData, keyed by scene+node name) rather than
+	# every time this node's _ready() runs — otherwise re-entering the room
+	# would silently re-roll a different ore type each visit within the same
+	# playthrough instead of staying fixed until the next New Game.
+	if ore_type == OreType.RANDOM:
+		var scene_path = get_tree().current_scene.scene_file_path
+		ore_type = GameData.get_random_choice(scene_path, name, RANDOM_CHOICE_COUNT) as OreType
 	original_color = $ColorRect.color
 	var sprite = get_node_or_null("Sprite2D")
 	if sprite:
@@ -44,10 +54,10 @@ func _process(_delta: float) -> void:
 	else:
 		HUD.hide_prompt("ore_break_hint")
 
-func on_elemental_hit(_element: String, hit_direction: int, damage: int) -> void:
-	on_hit(hit_direction, damage, true)
+func on_elemental_hit(_element: String, hit_direction: int, damage: int, attacker: Node = null) -> void:
+	on_hit(hit_direction, damage, true, attacker)
 
-func on_hit(hit_direction: int, damage: int, is_magic: bool = false) -> void:
+func on_hit(hit_direction: int, damage: int, is_magic: bool = false, _attacker: Node = null) -> void:
 	if hp <= 0:
 		return
 	if show_break_hint and not GameData.ore_break_hint_shown:

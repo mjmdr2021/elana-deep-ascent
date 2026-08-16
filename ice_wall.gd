@@ -40,7 +40,7 @@ func _process(delta: float) -> void:
 	if _lifetime_remaining <= 0.0:
 		queue_free()
 
-func on_hit(_hit_direction: int, damage: int, _is_magic: bool = false) -> void:
+func on_hit(_hit_direction: int, damage: int, _is_magic: bool = false, _attacker: Node = null) -> void:
 	hp -= damage
 	if hp <= 0:
 		queue_free()
@@ -50,5 +50,5 @@ func on_hit(_hit_direction: int, damage: int, _is_magic: bool = false) -> void:
 	if is_instance_valid(self):
 		_sprite.modulate = Color.WHITE
 
-func on_elemental_hit(_element: String, hit_direction: int, damage: int) -> void:
-	on_hit(hit_direction, damage, true)
+func on_elemental_hit(_element: String, hit_direction: int, damage: int, attacker: Node = null) -> void:
+	on_hit(hit_direction, damage, true, attacker)

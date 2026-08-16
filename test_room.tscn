@@ -87,7 +87,7 @@ position = Vector2(368, 304)
 
 [node name="Enemy8" parent="Enemies" unique_id=140608404 instance=ExtResource("5_sqxie")]
 position = Vector2(704, 304)
-xp_reward = 50
+xp_reward = 100
 
 [node name="Enemy3" parent="Enemies" unique_id=1490681177 instance=ExtResource("5_sqxie")]
 position = Vector2(384, 152)

@@ -18,5 +18,16 @@ func _on_body_entered(body):
 		GameData.active_ritual_node = node_id
 		GameData.respawn_scene = get_tree().current_scene.scene_file_path
 		GameData.respawn_position = global_position
-		$ColorRect.color = Color.YELLOW
 		GameData.save_game()
+		_activate()
+
+# A beat of weight to actually activating one — freezes her for 1s (matching
+# the color tween's own duration) while the node eases from white to yellow,
+# instead of the instant color-snap this used to be.
+func _activate() -> void:
+	GameData.in_cutscene = true
+	$ColorRect.color = Color.WHITE
+	var tween := create_tween()
+	tween.tween_property($ColorRect, "color", Color.YELLOW, 1.0)
+	await get_tree().create_timer(1.0).timeout
+	GameData.in_cutscene = false

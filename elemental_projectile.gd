@@ -13,6 +13,10 @@ var speed: float = 350.0
 var lifetime: float = 3.0
 var damage: int = 10
 var element: String = "fire"
+# Only ever fired by elana.gd (_spawn_elemental_proj()) — set there. Passed
+# through to on_elemental_hit() so a kill from this counts as Elana's own
+# for XP purposes (see hit_handler.gd's _die()).
+var source: Node = null
 var _distance_traveled: float = 0.0
 var _frost_targets: Dictionary = {}  # enemy -> time since last hit
 var _frost_sprite: AnimatedSprite2D = null
@@ -179,7 +183,17 @@ func _add_frost_sprite() -> void:
 	# in _physics_process() instead of sitting at one flat brightness.
 	_frost_light = _add_glow(Color(0.5, 0.85, 1.0), Color(0.5, 0.85, 1.0), FROST_GLOW_MIN, 0.6)
 
-func _on_body_entered(_body) -> void:
+func _on_body_entered(body) -> void:
+	# Ignore enemy bodies — damage only comes through the Hurtbox
+	# area_entered path below. This normally never matters (every other
+	# enemy's collision_layer is enemy-only, layer 2, which isn't in this
+	# projectile's mask at all) but Hollowfang's body also sits on the
+	# terrain layer (so Elana can't walk through it), which put it in this
+	# mask too — without this check, the bolt was hitting the boss's solid
+	# body and queue_free()ing here with zero damage dealt, before it could
+	# ever reach the Hurtbox.
+	if body.is_in_group("enemies"):
+		return
 	_spawn_impact_glow()
 	queue_free()
 
@@ -191,9 +205,9 @@ func _on_area_entered(area) -> void:
 	if element == "frost":
 		if not _frost_targets.has(enemy):
 			_frost_targets[enemy] = 0.0
-			enemy.on_elemental_hit(element, hit_dir, damage)
+			enemy.on_elemental_hit(element, hit_dir, damage, source)
 	else:
-		enemy.on_elemental_hit(element, hit_dir, damage)
+		enemy.on_elemental_hit(element, hit_dir, damage, source)
 		_spawn_impact_glow()
 		queue_free()
 
@@ -273,7 +287,7 @@ func _physics_process(delta) -> void:
 			_frost_targets[enemy] += delta
 			if _frost_targets[enemy] >= FROST_TICK_INTERVAL:
 				_frost_targets[enemy] -= FROST_TICK_INTERVAL
-				enemy.on_elemental_hit(element, hit_dir, damage)
+				enemy.on_elemental_hit(element, hit_dir, damage, source)
 	else:
 		lifetime -= delta
 		if lifetime <= 0:

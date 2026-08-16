@@ -165,7 +165,12 @@ func _on_new_game() -> void:
 	# Being — HUD.set_hud_visible(true) only fires once she's actually
 	# granted the power (see stone_being.gd), not at New Game.
 	HUD.set_hud_visible(false)
-	get_tree().change_scene_to_file("res://full_map.tscn")
+	# Routed through loading_screen.tscn instead of a direct
+	# change_scene_to_file() — that call is synchronous and blocks the main
+	# thread for the whole load+instantiate of full_map.tscn (a noticeable
+	# freeze with zero feedback); the loading screen threads it instead.
+	GameData.pending_scene_load = "res://full_map.tscn"
+	get_tree().change_scene_to_file("res://loading_screen.tscn")
 
 func _on_continue() -> void:
 	if not GameData.load_game():
@@ -191,7 +196,9 @@ func _on_continue() -> void:
 		GameData.just_died = true
 	else:
 		GameData.use_default_spawn = true
-	get_tree().change_scene_to_file(target_scene)
+	# Same threaded hand-off as _on_new_game() — see its comment above.
+	GameData.pending_scene_load = target_scene
+	get_tree().change_scene_to_file("res://loading_screen.tscn")
 
 func _on_settings() -> void:
 	_settings_overlay.visible = true

@@ -16,6 +16,12 @@ const SURFACE_JUMP_TERRAIN_RANGE: float = 24.0
 var _in_water: bool = false
 var _was_in_water: bool = false
 var _at_water_surface: bool = false
+var _knockback_timer: float = 0.0
+var _knockback_ignores_gravity: bool = false
+var _last_valid_position: Vector2 = Vector2.ZERO
+var _nan_recovery_streak: int = 0
+var _last_recovery_position: Vector2 = Vector2.INF
+const NAN_RECOVERY_SAFE_DISTANCE: float = 30.0
 var _default_floor_snap_length: float = 0.0
 const WALL_JUMP_PUSH = 240.0
 const GRAPPLE_PULL_SPEED: float = 325.0
@@ -87,6 +93,13 @@ var _zoom_lerp_speed: float = 5.0
 # because dialog_marker.gd's boss-arena pan tweens it directly instead of
 # Camera.offset, so the two never fight over the same property.
 var camera_offset_base: Vector2 = Vector2.ZERO
+# Godot's own "effectively unlimited" defaults, captured in _ready() —
+# _update_camera_lock() swaps $Camera's limit_left/top/right/bottom
+# between these and a boss's actual bounds.
+var _default_camera_limit_left: int
+var _default_camera_limit_top: int
+var _default_camera_limit_right: int
+var _default_camera_limit_bottom: int
 var _shake_trauma: float = 0.0
 const SHAKE_DECAY: float = 2.5
 const SHAKE_MAX_OFFSET: float = 5.0
@@ -154,6 +167,13 @@ func _ready():
 	$Camera.drag_vertical_enabled = true
 	$Camera.drag_top_margin = 0.2
 	$Camera.drag_bottom_margin = 0.2
+	# Captured so _update_camera_lock() can restore them exactly once a boss
+	# fight's bounds are no longer active, rather than hardcoding Godot's
+	# "effectively unlimited" sentinel values.
+	_default_camera_limit_left = $Camera.limit_left
+	_default_camera_limit_top = $Camera.limit_top
+	_default_camera_limit_right = $Camera.limit_right
+	_default_camera_limit_bottom = $Camera.limit_bottom
 	if GameData.use_default_spawn:
 		GameData.use_default_spawn = false
 		var spawn = get_tree().current_scene.get_node_or_null(GameData.default_spawn_id)
@@ -229,24 +249,34 @@ func _start_intro_cutscene() -> void:
 	facing = 1
 	GameData.glint_position_locked = true
 	GameData.glint_lock_follows_facing = true
+	HUD.show_skip_button()
 
 	HUD.show_dialogue(DialogueData.INTRO_PART1, false)
 	await HUD.dialogue_finished
+	if HUD.skip_requested:
+		_finish_intro_cutscene()
+		return
 
 	# Scripted walk left for 1.5s — Glint (still dynamically locked) follows
 	# the facing change and ends up on Elana's right, behind her.
 	facing = -1
 	GameData.cutscene_scripted_move = true
 	var walk_time = 1.5
-	while walk_time > 0.0:
+	while walk_time > 0.0 and not HUD.skip_requested:
 		velocity.x = -MOVE_SPEED
 		walk_time -= get_physics_process_delta_time()
 		await get_tree().physics_frame
 	velocity.x = 0.0
 	GameData.cutscene_scripted_move = false
+	if HUD.skip_requested:
+		_finish_intro_cutscene()
+		return
 
 	HUD.show_dialogue(DialogueData.INTRO_PART2, false)
 	await HUD.dialogue_finished
+	if HUD.skip_requested:
+		_finish_intro_cutscene()
+		return
 
 	# Looks back — turns to face right. Glint's lock switches to frozen, so
 	# she doesn't slide along with the turn; the turn reveals her instead,
@@ -259,10 +289,23 @@ func _start_intro_cutscene() -> void:
 
 	HUD.show_dialogue(DialogueData.INTRO_PART3A, false)
 	await HUD.dialogue_finished
+	if HUD.skip_requested:
+		_finish_intro_cutscene()
+		return
 
 	HUD.show_dialogue(DialogueData.INTRO_PART3B, false, {"Glint": get_node("Glint")})
 	await HUD.dialogue_finished
 
+	_finish_intro_cutscene()
+
+# Single end-state applier — reached either by playing every beat above to
+# its natural end, or by the skip button cutting in partway through.
+func _finish_intro_cutscene() -> void:
+	HUD.hide_skip_button()
+	velocity.x = 0.0
+	GameData.cutscene_scripted_move = false
+	facing = 1
+	GameData.glint_lock_follows_facing = false
 	GameData.glint_position_locked = false
 	GameData.in_cutscene = false
 
@@ -291,13 +334,19 @@ func take_damage(amount = 10, is_elemental: bool = false, attacker: Node = null,
 		var resist = GameData.get_elemental_resist_for(element) if element != "" else GameData.elemental_resist
 		if resist > 0.0:
 			reduced_amount *= (1.0 - resist)
+	# Ant Queen's death reward — halves damage from anything tagged
+	# "hazards" (spikes, vine thorns, Hollowfang's falling rocks, future
+	# floor spikes), stacking multiplicatively with the elemental-resist
+	# reduction above like every other reduction here does.
+	if GameData.ant_queen_defeated and attacker != null and attacker.is_in_group("hazards"):
+		reduced_amount *= (1.0 - GameData.HAZARD_DAMAGE_REDUCTION)
 	var final_damage = GameData.calc_damage(reduced_amount, float(GameData.get_defense()))
 	# Bulwark — reflect to actual attacking enemies only. Environmental hazards
 	# (vine gates, spikes, magma tiles, ice geysers/walls) deal contact damage
 	# too but aren't attackers, so they're excluded via the "enemies" group.
 	if GameData.bulwark_pct > 0.0 and attacker != null and attacker.is_in_group("enemies"):
 		var reflect_dmg: int = max(1, int(float(final_damage) * GameData.bulwark_pct))
-		attacker.on_hit(-attacker.direction, reflect_dmg, true)
+		attacker.on_hit(-attacker.direction, reflect_dmg, true, self)
 	# Life Barrier — 90% flat damage reduction while held (right-click + Heal
 	# Herb), not an absorb pool, so it never depletes on its own.
 	if _life_barrier_active:
@@ -317,7 +366,7 @@ func take_damage(amount = 10, is_elemental: bool = false, attacker: Node = null,
 			return
 		final_damage = remaining
 	GameData.hp -= final_damage
-	GameData.spawn_damage_number(final_damage, global_position, Color(1.0, 0.3, 0.3))
+	GameData.spawn_damage_number(final_damage, global_position, Color.RED)
 	# Only "big" hits shake — chip damage stays quiet. Scales with how much
 	# of her max HP it took, so a near-lethal hit shakes harder than one
 	# that's merely above the threshold.
@@ -346,6 +395,7 @@ func die():
 		return
 	_is_dead = true
 	Engine.time_scale = 1.0
+	GameData.reset_boss_camera()
 	# Freezes her (movement/input) for the wait — die() already clears this
 	# as part of its normal cleanup right after, so nothing extra to reset.
 	GameData.in_cutscene = true
@@ -392,6 +442,54 @@ func apply_stun(duration: float) -> void:
 		return
 	is_stunned = true
 	stun_timer = max(stun_timer, duration)
+
+# Not merged with apply_stun's min/max pattern — a fresh knockback should
+# always take over cleanly (e.g. Charger's dash), not blend with whatever
+# velocity/timer was already active.
+func apply_knockback(vec: Vector2, duration: float = 0.3, ignore_gravity: bool = false) -> void:
+	if is_dodging:
+		return
+	# Rejected here, not just cleaned up after the fact — every knockback
+	# source in the game (hazards, boss attacks, drags) funnels through this
+	# one function, so validating the vector right at the point it's about
+	# to become real velocity stops a bad caller (e.g. a knockback direction
+	# computed via .normalized() on a near-zero vector, or a degenerate
+	# collision producing NaN/Inf) from ever reaching global_position at
+	# all, instead of only detecting the damage afterward.
+	if not (is_finite(vec.x) and is_finite(vec.y)):
+		return
+	# Set velocity directly, once, here — not every frame in _physics_process
+	# — so gravity (added there each frame below) actually accumulates onto
+	# it into a real parabola instead of being reset to the same constant
+	# base every tick. ignore_gravity opts out of that entirely — for a
+	# precise drag toward an exact target (apply_drag_stun()) rather than a
+	# toss, any accumulated gravity corrupts the constant velocity the caller
+	# deliberately computed to land exactly on target, cutting it short.
+	velocity = vec
+	_knockback_timer = duration
+	_knockback_ignores_gravity = ignore_gravity
+
+# Physically drags Elana toward target over drag_duration — reuses the same
+# _knockback_timer-driven movement path apply_knockback() does, so
+# move_and_slide()'s own wall-collision handling applies naturally (unlike a
+# raw position tween, which has no collision awareness at all and would
+# drag her straight through terrain). If she ends up pressed against a wall
+# once the drag finishes, she's pinned fully in place (apply_freeze — no
+# gravity, no sliding) for whatever's left of total_stun_duration instead of
+# just falling through a normal stun — used by Hollowfang's Eject Spikes so
+# getting dragged into a wall reads as an actual pin, not a stopped shove.
+func apply_drag_stun(target: Vector2, drag_duration: float, total_stun_duration: float) -> void:
+	if is_dodging:
+		return
+	is_stunned = true
+	stun_timer = max(stun_timer, total_stun_duration)
+	var drag_vec: Vector2 = (target - global_position) / drag_duration
+	apply_knockback(drag_vec, drag_duration, true)
+	await get_tree().create_timer(drag_duration).timeout
+	if not is_instance_valid(self):
+		return
+	if is_on_wall():
+		apply_freeze(max(0.0, total_stun_duration - drag_duration))
 
 func apply_freeze(duration: float) -> void:
 	if is_dodging:
@@ -544,7 +642,7 @@ func _on_hitbox_area_entered(area):
 		if GameData.berserker_mult > 0.0 and GameData.hp <= GameData.max_hp * 0.40:
 			dmg = int(float(dmg) * (1.0 + GameData.berserker_mult))
 		dmg = _apply_glint_weapon_bonuses(dmg, enemy)
-		enemy.on_hit(facing, dmg)
+		enemy.on_hit(facing, dmg, false, self)
 		if is_heavy_attack and GameData.current_weapon == "warhammer":
 			add_camera_trauma(0.5)
 		GameData.glint_register_hit()
@@ -578,9 +676,10 @@ func _phantom_strike(enemy: Node, base_dmg: int) -> void:
 	if not is_instance_valid(enemy):
 		return
 	var dmg = max(1, int(float(base_dmg) * GameData.GLINT_PHANTOM_DMG))
-	if randf() < GameData.glint_crit_chance:
+	GameData.last_hit_is_crit = randf() < GameData.glint_crit_chance
+	if GameData.last_hit_is_crit:
 		dmg = int(float(dmg) * GameData.glint_crit_dmg_mult)
-	enemy.on_hit(facing, dmg)
+	enemy.on_hit(facing, dmg, false, self)
 
 # Elec Herb Chain: melee hits arc to nearby enemies. Arc count = node level,
 # damage is magic-based (weapon-independent) with the chain-lightning falloff.
@@ -593,7 +692,7 @@ func _glint_chain_arc(source: Node) -> void:
 		if next == null:
 			break
 		var chain_dir: int = 1 if next.global_position.x >= prev.global_position.x else -1
-		next.on_elemental_hit("elec", chain_dir, arc_dmg)
+		next.on_elemental_hit("elec", chain_dir, arc_dmg, self)
 		_draw_elec_bolt(_enemy_center(prev), _enemy_center(next))
 		prev = next
 
@@ -604,6 +703,11 @@ func _melee_base_damage(mult: float = 1.0) -> int:
 
 func _apply_glint_weapon_bonuses(dmg: int, enemy: Node) -> int:
 	if GameData.current_weapon == "fist":
+		# Every weapon bonus below (incl. the crit roll) is skipped for fist,
+		# so explicitly clear rather than leaving whatever the last weapon
+		# swing's roll happened to be — otherwise a fist hit right after a
+		# crit could still render its damage number yellow.
+		GameData.last_hit_is_crit = false
 		return dmg
 	if GameData.glint_weapon_dmg_bonus > 0.0:
 		dmg = int(float(dmg) * (1.0 + GameData.glint_weapon_dmg_bonus))
@@ -614,7 +718,11 @@ func _apply_glint_weapon_bonuses(dmg: int, enemy: Node) -> int:
 	if GameData.glint_exec_stacks > 0:
 		var per_stack = 0.05 * GameData.get_glint_skill_level("g_executioner")
 		dmg = int(float(dmg) * (1.0 + per_stack * GameData.glint_exec_stacks))
-	if randf() < GameData.glint_crit_chance:
+	# Set explicitly either way (not just on a crit) so a later non-crit swing
+	# can't inherit a stale true left over from an earlier crit — hit_handler.gd
+	# reads this the instant it spawns the damage number below.
+	GameData.last_hit_is_crit = randf() < GameData.glint_crit_chance
+	if GameData.last_hit_is_crit:
 		dmg = int(float(dmg) * GameData.glint_crit_dmg_mult)
 	if randf() < GameData.glint_armor_ignore_chance:
 		# pre-compensate so the enemy's defense reduction cancels out exactly
@@ -624,6 +732,24 @@ func _apply_glint_weapon_bonuses(dmg: int, enemy: Node) -> int:
 	return dmg
 
 func _physics_process(delta):
+	# Safety net — a NaN global_position (e.g. from a degenerate collision
+	# shape producing NaN velocity in move_and_slide()) never self-corrects
+	# on its own; every frame after just stays NaN forever, which renders as
+	# a totally blank screen (Camera2D tracking a NaN position shows
+	# nothing, while UI on its own CanvasLayer keeps working — exactly the
+	# reported symptom). Recovers to the last known-good position instead
+	# of leaving the run permanently broken, whatever actually caused it.
+	if is_nan(global_position.x) or is_nan(global_position.y):
+		_recover_from_nan()
+	else:
+		_last_valid_position = global_position
+		# Only clears the streak once she's actually moved clear of where she
+		# last got corrupted — a single frame reading "valid" right at the
+		# same spot isn't real recovery, it's the oscillation itself
+		# (confirmed: reported streak resetting to 1 every time even while
+		# repeatedly recovering to the exact same coordinates).
+		if _last_recovery_position == Vector2.INF or global_position.distance_to(_last_recovery_position) > NAN_RECOVERY_SAFE_DISTANCE:
+			_nan_recovery_streak = 0
 	# Computed first thing, before the dodge/air-dash checks further down —
 	# those need this fresh, not last frame's value. Surface = on a water
 	# tile but the tile directly above (one grid step, 16px) isn't water —
@@ -681,6 +807,22 @@ func _physics_process(delta):
 	# Frozen — fully locked, matches enemy is_frozen (zeroed velocity, no input)
 	if is_frozen:
 		velocity = Vector2.ZERO
+		move_and_slide()
+		return
+
+	# Externally-applied knockback (e.g. Charger's dash) — a dedicated
+	# early-return block, same shape as dodge/air-dash below. A naive
+	# `velocity = knockback` write from outside this function would just
+	# get overwritten the same frame by the normal horizontal-movement line
+	# further down (it sets velocity.x = direction * speed unconditionally
+	# whenever not wall-locked/sliding, regardless of is_stunned), so
+	# knockback needs its own state that fully bypasses that, same reason
+	# enemies consume _pending_knockback specially instead of just writing
+	# to velocity directly.
+	if _knockback_timer > 0.0:
+		_knockback_timer -= delta
+		if not _knockback_ignores_gravity:
+			velocity.y += gravity * delta
 		move_and_slide()
 		return
 
@@ -893,6 +1035,16 @@ func _physics_process(delta):
 			velocity.x = direction * speed
 
 	move_and_slide()
+	# Same-frame catch — the top-of-frame check (above, start of this
+	# function) only catches this one frame late, which is the gap where a
+	# NaN result from this specific move_and_slide() call could still
+	# render once before recovering. Checking right here closes that gap
+	# for the main/default movement path specifically (the one active
+	# during ordinary standing-and-taking-a-hit situations, as opposed to
+	# the dodge/knockback/water/grapple/plunge branches above, which each
+	# already return before reaching this line).
+	if is_nan(velocity.x) or is_nan(velocity.y):
+		_recover_from_nan()
 
 func _has_stair_corner() -> bool:
 	var away_from_wall = sign(get_wall_normal().x)
@@ -933,10 +1085,12 @@ func _draw() -> void:
 func _process(delta):
 	_update_sprite(delta)
 	_update_camera_zoom(delta)
+	_update_camera_lock(delta)
 	_update_camera_shake(delta)
 	_update_elec_redraw()
 	_tick_passives(delta)
 	_tick_status_effects(delta)
+	_tick_scout_weapon_drain(delta)
 	# Glint's off scouting, or a cutscene/dialogue is playing — no attacking,
 	# aiming, or herb-charging for Elana until it's over, on top of the
 	# movement freeze in _physics_process. Also locked for the whole
@@ -968,16 +1122,24 @@ func _update_sprite(delta: float) -> void:
 		if _idle_timer >= IDLE_NORMAL_THRESHOLD:
 			_idle_normal_active = true
 	var anim: String
+	# Glint is the one who visually becomes the weapon, hovering at Elana's
+	# side — she's detached and off scouting during this, so the weapon
+	# shouldn't still show on Elana's own sprite even though
+	# GameData.current_weapon stays the real, logically-equipped weapon
+	# underneath (gameplay-wise, and for the scouting HP-drain cost — see
+	# _tick_scout_weapon_drain()). Visual-only override, confined to anim
+	# selection here.
+	var visual_weapon: String = "fist" if GameData.glint_scouting else GameData.current_weapon
 	if attacking_now:
-		anim = _fist_attack_anim if GameData.current_weapon == "fist" else "attack_" + GameData.current_weapon
+		anim = _fist_attack_anim if visual_weapon == "fist" else "attack_" + visual_weapon
 		if not _sprite.sprite_frames.has_animation(anim):
 			anim = "attack_fist"
 	elif moving_now:
 		anim = "walk"
-	elif GameData.current_weapon == "fist" and _idle_normal_active and _sprite.sprite_frames.has_animation("idle_normal"):
+	elif visual_weapon == "fist" and _idle_normal_active and _sprite.sprite_frames.has_animation("idle_normal"):
 		anim = "idle_normal"
 	else:
-		anim = "idle_" + GameData.current_weapon
+		anim = "idle_" + visual_weapon
 		if not _sprite.sprite_frames.has_animation(anim):
 			anim = "idle"
 	# Only trigger play() when the animation actually changes — guarantees the
@@ -986,7 +1148,7 @@ func _update_sprite(delta: float) -> void:
 	if _sprite.animation != anim:
 		_sprite.play(anim)
 
-const BOSS_ZOOM: Vector2 = Vector2(2.0, 2.0)
+const BOSS_ZOOM: Vector2 = Vector2(3.5, 3.5)
 
 func _update_camera_zoom(delta: float) -> void:
 	if GameData.dev_fixed_zoom_1x:
@@ -995,8 +1157,15 @@ func _update_camera_zoom(delta: float) -> void:
 	# Boss arena reveal — overrides the normal context-based zoom entirely and
 	# stays wide indefinitely once set (nothing clears it automatically; a
 	# future "boss defeated" trigger would be the one to turn it back off).
+	# boss_zoom_active and camera_locked now flip on together in one step
+	# (dialog_marker.gd's BossCameraLock()) — no separate intermediate
+	# cutscene zoom stage anymore; the pan/roar/knockup reveal beat before it
+	# (Boss1NormalEntrance()) deliberately leaves zoom untouched. Slower
+	# than the 5.0 rate every combat zoom pop above uses (those are meant to
+	# be quick, punchy reactions) — this is a one-shot cinematic zoom, so a
+	# gentler ease reads as smooth rather than snappy.
 	if GameData.boss_zoom_active:
-		$Camera.zoom = $Camera.zoom.lerp(BOSS_ZOOM, 5.0 * delta)
+		$Camera.zoom = $Camera.zoom.lerp(BOSS_ZOOM, 1.5 * delta)
 		return
 	var zoom_active := false
 	if is_plunge_attacking:
@@ -1041,6 +1210,52 @@ func _update_camera_zoom(delta: float) -> void:
 # several triggers landing close together don't overshoot past full shake.
 func add_camera_trauma(amount: float) -> void:
 	_shake_trauma = min(1.0, _shake_trauma + amount)
+
+# Shared by both NaN-position check points. Always recovers to
+# _last_valid_position (never teleports to the checkpoint — that was more
+# disruptive than the bug itself, per user feedback).
+func _recover_from_nan() -> void:
+	_nan_recovery_streak += 1
+	global_position = _last_valid_position
+	_last_recovery_position = global_position
+	velocity = Vector2.ZERO
+
+# While GameData.camera_locked is true (boss-arena reveal cutscene — see
+# dialog_marker.gd), keeps $Camera's own native limit_left/top/right/
+# bottom synced to GameData.camera_bounds — NOT manual per-frame offset math
+# like this used to do. The engine clamps its own rendered camera position
+# directly against those limits, so there's no "assumed position vs. actual
+# position" to fall out of sync (that's what caused the jump-triggered
+# wonkiness with the old camera_offset_base-based approach — it worked from
+# Elana's exact global_position each frame, an assumption a fast jump could
+# outrun before the lerp caught up). Limits apply correctly regardless of
+# drag/smoothing settings, so nothing else needs touching for this. Once
+# cleared (reset_boss_camera(), on boss death or her own respawn), limits
+# are restored to their captured "unlimited" defaults from _ready().
+func _update_camera_lock(delta: float) -> void:
+	# A scripted pan-tween (dialog_marker.gd's CAMERA_PAN cutscene) owns
+	# camera_offset_base directly right now — touching it here too would
+	# fight the tween's own animation every frame instead of leaving it in
+	# sole control.
+	if GameData.camera_pan_active:
+		return
+	if GameData.camera_locked:
+		# An empty bounds rect means no boss-provided bounds (e.g. a future
+		# boss without get_camera_bounds()) — leave whatever limits are
+		# already applied rather than clamping to a single point at (0,0).
+		if GameData.camera_bounds.size != Vector2.ZERO:
+			$Camera.limit_left = int(GameData.camera_bounds.position.x)
+			$Camera.limit_right = int(GameData.camera_bounds.end.x)
+			$Camera.limit_top = int(GameData.camera_bounds.position.y)
+			$Camera.limit_bottom = int(GameData.camera_bounds.end.y)
+	else:
+		$Camera.limit_left = _default_camera_limit_left
+		$Camera.limit_top = _default_camera_limit_top
+		$Camera.limit_right = _default_camera_limit_right
+		$Camera.limit_bottom = _default_camera_limit_bottom
+	# No lock-driven offset anymore — bounding is entirely the native
+	# limits' job now, so this just decays back to zero same as always.
+	camera_offset_base = camera_offset_base.lerp(Vector2.ZERO, 5.0 * delta)
 
 func _update_camera_shake(delta: float) -> void:
 	if _shake_trauma > 0.0:
@@ -1123,6 +1338,22 @@ func _tick_passives(delta: float) -> void:
 		var hs_ready = GameData.hollowscale_unlocked and GameData.hollowscale_cooldown <= 0.0
 		_sprite_effects_material.set_shader_parameter("enabled", hs_ready)
 
+const SCOUT_HP_DRAIN_PER_SEC: float = 2.0
+
+# Cost of keeping the current weapon equipped while Glint's off scouting —
+# she no longer force-reverts to fist the instant scouting starts (see the
+# scout_glint input handler), so this is what actually makes leaving a
+# weapon transformed active while detached cost something. Fist has no
+# Glint HP pool to drain (same guard glint_take_hit() itself uses), so
+# there's nothing to lose while unarmed. If this drains her to 0 mid-scout,
+# she doesn't revert immediately/mid-flight — that's check_weapon_depletion(),
+# called once scouting fully ends (glint.gd's _process_scouting()), same as
+# every other Glint-HP-cost path in this file already defers to.
+func _tick_scout_weapon_drain(delta: float) -> void:
+	if not GameData.glint_scouting or GameData.current_weapon == "fist":
+		return
+	GameData.glint_hp = max(0.0, GameData.glint_hp - SCOUT_HP_DRAIN_PER_SEC * delta)
+
 # Blessing #3 — slows every active enemy and enemy projectile in the room;
 # Elana is unaffected. No new slow mechanic: reuses the existing apply_slow()
 # built for hazards.
@@ -1193,6 +1424,7 @@ func _spawn_shockwave() -> void:
 	sw.global_position = global_position + Vector2(tip_x, 0.0)
 	sw.direction = facing
 	sw.damage = max(1, _melee_base_damage(GameData.shockwave_pct))
+	sw.source = self
 	get_parent().add_child(sw)
 
 func attack():
@@ -1318,6 +1550,12 @@ func _heavy_chain() -> void:
 	get_parent().add_child(proj)
 
 func _apply_heavy_knockback(enemy: Node) -> void:
+	# _pending_knockback is a base_enemy.gd field — not every "enemies"-group
+	# member declares it (e.g. hollowfang.gd extends CharacterBody2D
+	# directly), so an undeclared-property write here would throw a runtime
+	# script error instead of silently doing nothing.
+	if not ("_pending_knockback" in enemy):
+		return
 	match GameData.current_weapon:
 		"fist":
 			enemy._pending_knockback = Vector2(0.0, -260.0)
@@ -1340,7 +1578,12 @@ func _input(event) -> void:
 					and not is_dodging and not is_air_dashing and GameData.received_stone_being_power \
 					and GameData.glint_scout_tutorial_done:
 				GameData.glint_scouting = true
-				GameData.cancel_ore()
+				# No longer cancel_ore() here — scouting keeps whatever weapon
+				# is currently equipped instead of force-reverting to fist.
+				# Costs 2 Glint HP/sec while scouting instead (see elana.gd's
+				# _process()); if that drains her weapon's HP to 0 she reverts
+				# the normal way (check_weapon_depletion(), called once
+				# scouting fully ends — see glint.gd's _process_scouting()).
 				if not GameData.glint_scout_return_hint_shown:
 					GameData.glint_scout_return_hint_shown = true
 					HUD.show_prompt("Press X again to return to Elana", get_node("Glint"), "scout_return_hint")
@@ -1406,6 +1649,7 @@ func _spawn_elemental_proj(elem: String, dmg: int, dir: Vector2) -> void:
 	proj.element = elem
 	proj.damage = dmg
 	proj.aim_direction = dir
+	proj.source = self
 	proj.global_position = global_position + Vector2(facing * 8.0, -4)
 	get_parent().add_child(proj)
 
@@ -1549,6 +1793,15 @@ func _plunge_hit(enemy: Node, hit_dir: int, dmg: int) -> void:
 	_plunge_effect(enemy, hit_dir, color_rect, orig)
 
 func _plunge_effect(enemy: Node, hit_dir: int, color_rect: ColorRect, orig: Color) -> void:
+	# is_stunned/_pending_knockback are base_enemy.gd fields — not every
+	# "enemies"-group member declares them (e.g. hollowfang.gd extends
+	# CharacterBody2D directly), so skip the whole stun/knockback sequence
+	# for anything that doesn't support it rather than crashing on the
+	# undeclared-property write. (color_rect is already null for those
+	# targets too, since it's looked up by a node name only base_enemy.gd
+	# enemies have, so nothing else here needs guarding.)
+	if not ("is_stunned" in enemy):
+		return
 	enemy.is_stunned = true
 	match GameData.current_weapon:
 		"warhammer":
@@ -1587,6 +1840,31 @@ func _plunge_effect(enemy: Node, hit_dir: int, color_rect: ColorRect, orig: Colo
 			if is_instance_valid(enemy): enemy.is_stunned = false
 
 
+# enemy.global_position sits at each enemy's own collision origin — fine for
+# normal-sized enemies (effectively their body center), but wildly off for a
+# huge boss like Hollowfang. get_targeting_points() (opt-in hook) lets an
+# enemy expose several candidate points (e.g. head/body/tail markers placed
+# by hand in the editor) instead of one fixed spot — picks whichever is
+# actually closest to Elana, so short-range effects can connect near any
+# part of a large boss. get_targeting_center() is a single-point version of
+# the same hook for enemies that only need one. Falls back to plain
+# global_position for anything implementing neither.
+func _enemy_target_pos(enemy: Node) -> Vector2:
+	if enemy.has_method("get_targeting_points"):
+		var points: Array = enemy.get_targeting_points()
+		if not points.is_empty():
+			var best: Vector2 = points[0]
+			var best_dist: float = global_position.distance_to(best)
+			for i in range(1, points.size()):
+				var d: float = global_position.distance_to(points[i])
+				if d < best_dist:
+					best_dist = d
+					best = points[i]
+			return best
+	if enemy.has_method("get_targeting_center"):
+		return enemy.get_targeting_center()
+	return enemy.global_position
+
 func _find_elec_target() -> Node:
 	const MAX_RANGE = 125.0
 	const HALF_ANGLE_DEG = 35.0
@@ -1594,7 +1872,7 @@ func _find_elec_target() -> Node:
 	var closest: Node = null
 	var closest_dist = INF
 	for enemy in get_tree().get_nodes_in_group("enemies"):
-		var to_enemy: Vector2 = enemy.global_position - global_position
+		var to_enemy: Vector2 = _enemy_target_pos(enemy) - global_position
 		var dist = to_enemy.length()
 		if dist > MAX_RANGE:
 			continue
@@ -1612,7 +1890,7 @@ func _cast_elec_bolt(from_storm: bool = false) -> void:
 	elemental_cooldown_timer = ELEMENTAL_COOLDOWN * (1.0 - GameData.casting_speed_bonus)
 	var bolt_dmg: int = GameData.get_magic_damage()
 	var hit_dir: int = 1 if closest.global_position.x >= global_position.x else -1
-	closest.on_elemental_hit("elec", hit_dir, bolt_dmg)
+	closest.on_elemental_hit("elec", hit_dir, bolt_dmg, self)
 	_draw_elec_bolt(global_position, _enemy_center(closest))
 	if GameData.chain_lightning_count > 0:
 		var prev: Node = closest
@@ -1622,7 +1900,7 @@ func _cast_elec_bolt(from_storm: bool = false) -> void:
 			if next == null:
 				break
 			var chain_dir: int = 1 if next.global_position.x >= prev.global_position.x else -1
-			next.on_elemental_hit("elec", chain_dir, chain_dmg)
+			next.on_elemental_hit("elec", chain_dir, chain_dmg, self)
 			_draw_elec_bolt(_enemy_center(prev), _enemy_center(next))
 			chain_dmg = int(chain_dmg * 0.7)
 			prev = next
@@ -1638,14 +1916,14 @@ func _delay_second_elec(dmg: int) -> void:
 	if closest == null:
 		return
 	var hit_dir: int = 1 if closest.global_position.x >= global_position.x else -1
-	closest.on_elemental_hit("elec", hit_dir, dmg)
+	closest.on_elemental_hit("elec", hit_dir, dmg, self)
 	_draw_elec_bolt(global_position, _enemy_center(closest))
 
 # Enemies' global_position sits at their feet (collision origin) — offset
 # upward so elec effects visually connect to the middle of their body
 # instead of the ground beneath them.
 func _enemy_center(enemy: Node) -> Vector2:
-	return enemy.global_position + Vector2(0, -10)
+	return _enemy_target_pos(enemy) + Vector2(0, -10)
 
 const ELECTRIC_BOLT_FRAMES = [
 	"res://projectiles/electric_bolt1.png",
@@ -1793,10 +2071,11 @@ func _find_chain_target(prev: Node) -> Node:
 	const CHAIN_RANGE: float = 150.0
 	var best: Node = null
 	var best_dist: float = CHAIN_RANGE
+	var prev_pos: Vector2 = _enemy_target_pos(prev)
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if enemy == prev:
 			continue
-		var dist: float = enemy.global_position.distance_to(prev.global_position)
+		var dist: float = _enemy_target_pos(enemy).distance_to(prev_pos)
 		if dist < best_dist:
 			best_dist = dist
 			best = enemy
@@ -1827,8 +2106,11 @@ func _herb_fire_blast() -> void:
 		if enemy.global_position.distance_to(global_position) <= RADIUS:
 			var dir: int = int(sign(enemy.global_position.x - global_position.x))
 			if dir == 0: dir = facing
-			enemy.on_elemental_hit("fire", dir, dmg)
-			enemy._pending_knockback = (enemy.global_position - global_position).normalized() * 75.0 + Vector2(0.0, -30.0)
+			enemy.on_elemental_hit("fire", dir, dmg, self)
+			# _pending_knockback is a base_enemy.gd field — not every
+			# "enemies"-group member declares it (e.g. hollowfang.gd).
+			if "_pending_knockback" in enemy:
+				enemy._pending_knockback = (enemy.global_position - global_position).normalized() * 75.0 + Vector2(0.0, -30.0)
 	_spawn_fire_blast_sprite(global_position + Vector2(0, -5))
 	_spawn_fire_explosion_glow(global_position + Vector2(0, -5))
 
@@ -1871,6 +2153,11 @@ func _herb_flash_stun() -> void:
 		return
 	GameData.herb_timer -= cost
 	for enemy in get_tree().get_nodes_in_group("enemies"):
+		# stun_timer/is_stunned are base_enemy.gd fields — not every
+		# "enemies"-group member declares them (e.g. hollowfang.gd extends
+		# CharacterBody2D directly and has no stun state at all).
+		if not ("is_stunned" in enemy):
+			continue
 		enemy.stun_timer = 3.0
 		enemy.is_stunned = true
 		enemy.velocity = Vector2.ZERO

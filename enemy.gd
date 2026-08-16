@@ -14,9 +14,16 @@ func _ready() -> void:
 	start_position = position
 func _move(_delta: float) -> void:
 	if target:
-		var dist = abs(target.position.x - position.x)
+		# global_position, not position — local position only lines up with
+		# the target's when they share the same direct parent, which is
+		# true for statically-placed enemies (siblings of Elana under the
+		# room root) but not for swarm.gd's spawned Swarmers, which are
+		# children of the Swarm spawner node itself. Comparing local
+		# positions across two different coordinate spaces produced a
+		# meaningless direction — which is what read as Swarmers "fleeing".
+		var dist = abs(target.global_position.x - global_position.x)
 		if dist > stop_distance:
-			direction = sign(target.position.x - position.x)
+			direction = sign(target.global_position.x - global_position.x)
 			velocity.x = chase_speed * direction
 		else:
 			velocity.x = 0

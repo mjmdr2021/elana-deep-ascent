@@ -8,4 +8,4 @@ script = ExtResource("2_pollen_puffer")
 enemy_type = 1
 max_hp = 20
 defense = 0
-xp_reward = 10
+xp_reward = 60

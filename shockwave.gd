@@ -2,6 +2,10 @@ extends Area2D
 
 var direction: int = 1
 var damage: int = 0
+# Only ever fired by elana.gd (_spawn_shockwave()) — set there. Passed
+# through to on_hit() so a kill from this counts as Elana's own for XP
+# purposes (see hit_handler.gd's _die()).
+var source: Node = null
 
 const TRAVEL: float = 16.0
 const SPEED: float = 240.0
@@ -45,4 +49,4 @@ func _on_area_entered(area: Area2D) -> void:
 		return
 	_hit.append(enemy)
 	enemy.velocity.x += direction * 80.0
-	enemy.on_hit(direction, damage, true)
+	enemy.on_hit(direction, damage, true, source)

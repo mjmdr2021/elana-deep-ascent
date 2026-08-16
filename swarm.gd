@@ -16,7 +16,7 @@ const SWARMER_SCENE = preload("res://swarmer.tscn")
 @export var speed: float = 45.0
 @export var chase_speed: float = 70.0
 @export var attack_damage: int = 3
-@export var xp_reward: int = 3
+@export var xp_reward: int = 53
 
 func _ready() -> void:
 	# Editor-only marker so this node is actually visible/selectable while

@@ -11,4 +11,4 @@ defense = 10
 attack_damage = 10
 attack_cooldown_time = 1.2
 attack_windup_time = 0.15
-xp_reward = 8
+xp_reward = 58

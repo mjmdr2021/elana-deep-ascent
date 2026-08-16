@@ -8,6 +8,6 @@ script = ExtResource("2_spark_flies")
 max_hp = 5
 defense = 0
 attack_damage = 4
-xp_reward = 4
+xp_reward = 54
 modulate = Color(1.0, 0.95, 0.4, 1)
 elec_resist = 0.0

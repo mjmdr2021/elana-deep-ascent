@@ -104,6 +104,24 @@ const SCOUT_TUTORIAL: Array = [
 	{"speaker": "Elana", "text": "scout the area with your light?"},
 ]
 
+# ── DialogMarker — Air Dash tutorial (dialog_marker.gd) ─────────────────────
+const AIR_DASH_TUTORIAL: Array = [
+	{"speaker": "Elana", "text": "I think this is the hole I should not fall into."},
+	{"speaker": "Elana", "text": "And it's too far to just jump."},
+	{"speaker": "Elana", "text": "I should try the air dash."},
+]
+
+# ── LoreNotes — Ritual Node explanation (lore_notes.gd) ─────────────────────
+const LORE_RITUAL_NODE_EXPLANATION: Array = [
+	{"speaker": "Elana", "text": "Oh look, Glint, a note."},
+	{"speaker": "Elana", "text": "It's like it was torn from a notebook."},
+	{"speaker": "Elana", "text": "It says..."},
+	{"speaker": "Elana", "text": "These \"Ritual Nodes\" that light up—"},
+	{"speaker": "Elana", "text": "they apparently store my soul."},
+	{"speaker": "Elana", "text": "So when I die, these things revive me,"},
+	{"speaker": "Elana", "text": "and I start all over again."},
+]
+
 # ── Moleman (moleman.gd) ─────────────────────────────────────────────────────
 # talk_lines is still @export on moleman.gd — this is only the default value
 # for the first placed Moleman; other instances can override it entirely in

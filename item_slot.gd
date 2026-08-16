@@ -16,6 +16,7 @@ const ITEM_NAMES = {
 	"ore4":       "Hammer Ore",
 	"respecElana": "Elana's Respec Potion",
 	"respecGlint": "Glint's Respec Potion",
+	"note1": "Note #1",
 }
 
 const ITEM_COLORS = {
@@ -33,6 +34,7 @@ const ITEM_COLORS = {
 	"ore4": Color(0.7, 0.2, 0.2),
 	"respecElana": Color(0.75, 0.3, 0.75),
 	"respecGlint": Color(0.3, 0.75, 0.75),
+	"note1": Color(0.85, 0.8, 0.65),
 }
 
 var slot_index: int = 0
@@ -74,6 +76,8 @@ func _ready():
 		mouse_exited.connect(_on_mouse_exited)
 	else:
 		gui_input.connect(_on_quickslot_gui_input)
+		mouse_entered.connect(_on_quickslot_mouse_entered)
+		mouse_exited.connect(_on_quickslot_mouse_exited)
 		var key_hint = Label.new()
 		key_hint.text = str((slot_index + 1) % 10)
 		key_hint.position = Vector2(3, 1)
@@ -96,6 +100,16 @@ func _on_mouse_entered() -> void:
 func _on_mouse_exited() -> void:
 	if HUD.hovered_inventory_slot == slot_index:
 		HUD.hovered_inventory_slot = -1
+
+# Same shape as the inventory hover pair above, but for quickslots — lets
+# HUD's number-key handler swap the hovered quickslot into whichever number
+# gets pressed, instead of only supporting inventory-to-quickslot assignment.
+func _on_quickslot_mouse_entered() -> void:
+	HUD.hovered_quickslot_slot = slot_index
+
+func _on_quickslot_mouse_exited() -> void:
+	if HUD.hovered_quickslot_slot == slot_index:
+		HUD.hovered_quickslot_slot = -1
 
 func set_selected(selected: bool) -> void:
 	_style.border_color = Color(1, 1, 0) if selected else Color(0.45, 0.45, 0.45)

@@ -10,5 +10,5 @@ defense = 5
 speed = 25.0
 chase_speed = 45.0
 attack_damage = 10
-xp_reward = 14
+xp_reward = 64
 modulate = Color(0.55, 0.45, 0.65, 1)
