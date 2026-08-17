@@ -1441,3 +1441,21 @@ func on_elemental_hit(element: String, _hit_direction: int, damage: int, _attack
 # Hollowfang's, doesn't declare.
 func blocks_chain_pull() -> bool:
 	return true
+
+# Same opt-in hook Hollowfang's own get_targeting_points() implements, for
+# the exact same reason: elana.gd's Electric Herb bolt + chain lightning
+# both use a ~125-150px range check against a single point, which a boss
+# this size (512 tall) would almost never actually be within — she'd have
+# to stand nearly on top of one exact spot on his origin. The 5
+# ElectricBoltPoint nodes (spread across his body in the editor) give
+# elana.gd's targeting several points to pick the closest of instead of
+# one fixed spot, so the zap can connect near whichever part of him she's
+# actually standing near.
+func get_targeting_points() -> Array:
+	return [
+		$ElectricBoltPoint1/CollisionShape2D.global_position,
+		$ElectricBoltPoint2/CollisionShape2D.global_position,
+		$ElectricBoltPoint3/CollisionShape2D.global_position,
+		$ElectricBoltPoint4/CollisionShape2D.global_position,
+		$ElectricBoltPoint5/CollisionShape2D.global_position,
+	]

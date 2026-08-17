@@ -41,6 +41,9 @@ fill_to = Vector2(1, 0.5)
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_wind_gust_trigger"]
 size = Vector2(280, 312)
 
+[sub_resource type="CircleShape2D" id="CircleShape2D_electric_bolt"]
+radius = 40.0
+
 [node name="Elemander" type="CharacterBody2D" unique_id=1305713188]
 collision_layer = 3
 script = ExtResource("1_elemander")
@@ -219,6 +222,51 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 color = Color(0.85, 0.92, 1, 0.5)
+
+[node name="ElectricBoltPoint1" type="Area2D" parent="." unique_id=1000000100]
+collision_layer = 0
+collision_mask = 2
+monitoring = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ElectricBoltPoint1" unique_id=1000000101]
+position = Vector2(-72, -24)
+shape = SubResource("CircleShape2D_electric_bolt")
+
+[node name="ElectricBoltPoint2" type="Area2D" parent="." unique_id=1000000102]
+collision_layer = 0
+collision_mask = 2
+monitoring = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ElectricBoltPoint2" unique_id=1000000103]
+position = Vector2(-72, 40)
+shape = SubResource("CircleShape2D_electric_bolt")
+
+[node name="ElectricBoltPoint3" type="Area2D" parent="." unique_id=1000000104]
+collision_layer = 0
+collision_mask = 2
+monitoring = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ElectricBoltPoint3" unique_id=1000000105]
+position = Vector2(-72, 104)
+shape = SubResource("CircleShape2D_electric_bolt")
+
+[node name="ElectricBoltPoint4" type="Area2D" parent="." unique_id=1000000106]
+collision_layer = 0
+collision_mask = 2
+monitoring = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ElectricBoltPoint4" unique_id=1000000107]
+position = Vector2(-72, 168)
+shape = SubResource("CircleShape2D_electric_bolt")
+
+[node name="ElectricBoltPoint5" type="Area2D" parent="." unique_id=1000000108]
+collision_layer = 0
+collision_mask = 2
+monitoring = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ElectricBoltPoint5" unique_id=1000000109]
+position = Vector2(-72, 232)
+shape = SubResource("CircleShape2D_electric_bolt")
 
 [node name="HPBar" type="Node2D" parent="." unique_id=747220802]
 position = Vector2(-232, 200)
