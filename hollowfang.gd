@@ -339,6 +339,17 @@ var _flash_material: ShaderMaterial
 @onready var _hp_fill: ColorRect = $HPBar/Fill
 
 func _ready() -> void:
+	# Same self-destruct-on-reload check vine_gate.gd/rock_gate.gd run in
+	# their own _ready() — Hollowfang doesn't extend either of those (or
+	# base_enemy.gd/hit_handler.gd, which do this generically for every
+	# other enemy), so without this a killed Hollowfang would just respawn
+	# fresh on the next scene load/re-entry regardless of the fight's
+	# actual outcome. name is safe to key on here (unlike the entrance
+	# gate's dynamically-instantiated RockGate) — this is a single
+	# hand-placed instance in the scene, not spawned at runtime.
+	if GameData.is_removed(get_tree().current_scene.scene_file_path, name):
+		queue_free()
+		return
 	hp = max_hp
 	add_to_group("enemies")
 	add_to_group("bosses")
@@ -1416,6 +1427,7 @@ func _show_bite_stun_indicator() -> void:
 		_bite_stun_indicator = null
 
 func _die() -> void:
+	GameData.mark_removed(get_tree().current_scene.scene_file_path, name)
 	GameData.gain_xp(xp_reward)
 	GameData.reset_boss_camera()
 	boss_died.emit()

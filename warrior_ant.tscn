@@ -1,0 +1,13 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://enemy.tscn" id="1_enemy"]
+
+[node name="WarriorAnt" instance=ExtResource("1_enemy")]
+scale = Vector2(1.4, 1.4)
+max_hp = 45
+defense = 12
+speed = 40.0
+chase_speed = 65.0
+attack_damage = 16
+xp_reward = 90
+modulate = Color(0.55, 0.25, 0.15, 1)

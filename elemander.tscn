@@ -1,0 +1,234 @@
+[gd_scene format=3 uid="uid://chxb4aakfv5od"]
+
+[ext_resource type="Script" uid="uid://qo4whsp072c" path="res://elemander.gd" id="1_elemander"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_m5los"]
+size = Vector2(244, 312)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
+size = Vector2(244, 312)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_trigger"]
+size = Vector2(492, 312)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_ball"]
+radius = 14.0
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_sm2e3"]
+size = Vector2(600, 104)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_j1bql"]
+size = Vector2(600, 120)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_dash_area"]
+size = Vector2(600, 96)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_dash_collision"]
+size = Vector2(443, 86)
+
+[sub_resource type="Gradient" id="Gradient_fire_dash_glow"]
+offsets = PackedFloat32Array(0, 0.35, 1)
+colors = PackedColorArray(3, 1.4, 0.3, 1, 1, 0.35, 0.05, 0.6, 1, 0.2, 0.05, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_fire_dash_glow"]
+gradient = SubResource("Gradient_fire_dash_glow")
+width = 256
+height = 128
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_wind_gust_trigger"]
+size = Vector2(280, 312)
+
+[node name="Elemander" type="CharacterBody2D" unique_id=1305713188]
+collision_layer = 3
+script = ExtResource("1_elemander")
+max_hp = 6000
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1476502727]
+position = Vector2(22, 100)
+shape = SubResource("RectangleShape2D_m5los")
+
+[node name="BodyVisual" type="ColorRect" parent="." unique_id=429874598]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -100.0
+offset_top = -56.0
+offset_right = 144.0
+offset_bottom = 256.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.55, 0.25, 0.1, 1)
+
+[node name="Hurtbox" type="Area2D" parent="." unique_id=1541675936]
+collision_layer = 4
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox" unique_id=1058051684]
+position = Vector2(22, 100)
+shape = SubResource("RectangleShape2D_body")
+
+[node name="Head" type="Node2D" parent="." unique_id=1721573340]
+position = Vector2(-80, 8)
+
+[node name="AttackTriggerZone" type="Area2D" parent="." unique_id=637827921]
+position = Vector2(-346, 100)
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="AttackTriggerZone" unique_id=1485803010]
+shape = SubResource("RectangleShape2D_trigger")
+
+[node name="FrostBeam" type="Line2D" parent="." unique_id=1702112782]
+visible = false
+width = 14.0
+default_color = Color(0.4, 0.85, 1, 0.85)
+
+[node name="FrostBeamGlow" type="PointLight2D" parent="." unique_id=1000000070]
+visible = false
+z_index = 10
+
+[node name="DebugRaycastLine" type="Line2D" parent="." unique_id=1000000050]
+visible = false
+z_index = 20
+width = 4.0
+default_color = Color(1, 1, 0, 1)
+
+[node name="FrostBeamEndPoint" type="Area2D" parent="." unique_id=1000000001]
+visible = false
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="FrostBeamEndPoint" unique_id=1000000002]
+shape = SubResource("CircleShape2D_ball")
+
+[node name="Visual" type="ColorRect" parent="FrostBeamEndPoint" unique_id=1000000003]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -14.0
+offset_top = -14.0
+offset_right = 14.0
+offset_bottom = 14.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.4, 0.85, 1, 0.85)
+
+[node name="DashArea1" type="Area2D" parent="." unique_id=1000000010]
+position = Vector2(0, -300)
+collision_layer = 0
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="DashArea1" unique_id=1000000011]
+position = Vector2(-400, 280)
+shape = SubResource("RectangleShape2D_sm2e3")
+
+[node name="WarnFlash" type="ColorRect" parent="DashArea1" unique_id=1000000012]
+visible = false
+mouse_filter = 2
+color = Color(1, 0.4, 0.1, 0.5)
+
+[node name="DashArea2" type="Area2D" parent="." unique_id=1000000020]
+position = Vector2(0, -100)
+collision_layer = 0
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="DashArea2" unique_id=1000000021]
+position = Vector2(-400, 200)
+shape = SubResource("RectangleShape2D_j1bql")
+
+[node name="WarnFlash" type="ColorRect" parent="DashArea2" unique_id=1000000022]
+visible = false
+mouse_filter = 2
+color = Color(1, 0.4, 0.1, 0.5)
+
+[node name="DashArea3" type="Area2D" parent="." unique_id=1000000030]
+position = Vector2(0, 100)
+collision_layer = 0
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="DashArea3" unique_id=1000000031]
+position = Vector2(-400, 116)
+shape = SubResource("RectangleShape2D_dash_area")
+
+[node name="WarnFlash" type="ColorRect" parent="DashArea3" unique_id=1000000032]
+visible = false
+mouse_filter = 2
+color = Color(1, 0.4, 0.1, 0.5)
+
+[node name="ElemanderDashCollision" type="Area2D" parent="." unique_id=1000000040]
+visible = false
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ElemanderDashCollision" unique_id=1000000041]
+position = Vector2(-0.5, -5)
+shape = SubResource("RectangleShape2D_dash_collision")
+
+[node name="Visual" type="ColorRect" parent="ElemanderDashCollision" unique_id=1000000042]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -222.0
+offset_top = -48.0
+offset_right = 221.0
+offset_bottom = 38.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.35, 0.1, 0.9)
+
+[node name="Glow" type="PointLight2D" parent="ElemanderDashCollision" unique_id=1000000043]
+z_index = 10
+energy = 4.0
+texture = SubResource("GradientTexture2D_fire_dash_glow")
+
+[node name="WindGustTriggerZone" type="Area2D" parent="." unique_id=1000000080]
+position = Vector2(-150, 100)
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="WindGustTriggerZone" unique_id=1000000081]
+position = Vector2(106, 0)
+shape = SubResource("RectangleShape2D_wind_gust_trigger")
+
+[node name="WindGustVisual" type="Node2D" parent="." unique_id=1000000082]
+visible = false
+
+[node name="Visual" type="ColorRect" parent="WindGustVisual" unique_id=1000000083]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -30.0
+offset_right = 300.0
+offset_bottom = 30.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.85, 0.92, 1, 0.5)
+
+[node name="HPBar" type="Node2D" parent="." unique_id=747220802]
+position = Vector2(-232, 200)
+
+[node name="Background" type="ColorRect" parent="HPBar" unique_id=837062815]
+offset_right = 120.0
+offset_bottom = 8.0
+color = Color(0.18862307, 0.19213569, 0.18689519, 1)
+
+[node name="Fill" type="ColorRect" parent="HPBar" unique_id=291685979]
+offset_right = 120.0
+offset_bottom = 8.0
+color = Color(0.15, 0.55, 0.85, 1)

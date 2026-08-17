@@ -1,0 +1,17 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://enemy.tscn" id="1_enemy"]
+[ext_resource type="Script" path="res://ceiling_grabber.gd" id="2_ceiling_grabber"]
+
+[node name="CeilingGrabber" instance=ExtResource("1_enemy")]
+script = ExtResource("2_ceiling_grabber")
+max_hp = 30
+defense = 5
+attack_damage = 0
+xp_reward = 70
+modulate = Color(0.5, 0.2, 0.35, 1)
+
+[node name="Tongue" type="Line2D" parent="."]
+visible = false
+width = 5.0
+default_color = Color(0.85, 0.3, 0.45, 0.9)

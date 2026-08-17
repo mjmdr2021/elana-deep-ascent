@@ -33,4 +33,4 @@ func _ready() -> void:
 
 func _on_entered(body: Node) -> void:
 	if body.is_in_group("player") and body.has_method("apply_slow"):
-		body.apply_slow(slow_factor, slow_duration)
+		body.apply_slow(slow_factor, slow_duration, "frost")

@@ -41,6 +41,21 @@ var is_dodging = false
 var _is_dead = false
 var is_stunned: bool = false
 var is_frozen: bool = false
+# Distinct from is_frozen — both block input the same way (is_stunned
+# gates that), but freeze also hard-stops her (velocity = Vector2.ZERO in
+# apply_freeze()) while shocked deliberately leaves velocity untouched, so
+# whatever momentum she had carries through the stun instead of snapping to
+# a dead stop. Cleared alongside is_frozen when stun_timer expires.
+var is_shocked: bool = false
+# Position pinned to _trap_anchor every physics frame (see the early-return
+# block near the top of _physics_process) — e.g. Ceiling Grabber's tongue
+# hold. Not merged into is_frozen/is_shocked's shared stun_timer countdown;
+# released explicitly by whatever trapped her (release_trap()), not on a
+# timer, since how long it lasts is up to that source (breaking the tongue,
+# killing the grabber, etc.), not a fixed duration.
+var is_trapped: bool = false
+var _trap_anchor: Node = null
+var _trap_offset: Vector2 = Vector2.ZERO
 var stun_timer: float = 0.0
 var slow_timer: float = 0.0
 var slow_factor: float = 1.0
@@ -413,6 +428,7 @@ func die():
 		HUD.set_hud_visible(true)
 	is_stunned = false
 	is_frozen = false
+	is_shocked = false
 	stun_timer = 0.0
 	slow_timer = 0.0
 	slow_factor = 1.0
@@ -500,8 +516,72 @@ func apply_freeze(duration: float) -> void:
 	velocity = Vector2.ZERO
 	_update_status_tint()
 
-func apply_slow(factor: float, duration: float) -> void:
+# Functionally identical to apply_stun() (is_stunned blocks direction/jump/
+# attack the same way, which naturally hard-stops horizontal movement too —
+# nothing needs to zero velocity.x separately) — is_shocked exists as its
+# own tracked flag purely so this reads as a distinct status from a plain
+# stun, and so it can be told apart from apply_freeze() specifically:
+# freeze also zeros velocity outright (both axes), stopping a fall dead in
+# midair, while shock leaves vertical velocity alone entirely — gravity
+# keeps pulling her down mid-fall same as if nothing happened, only
+# horizontal control is cut.
+func apply_shock(duration: float) -> void:
 	if is_dodging:
+		return
+	if _is_immune_to_status_element("elec"):
+		return
+	is_stunned = true
+	is_shocked = true
+	stun_timer = max(stun_timer, duration)
+
+# Matching herb grants full immunity to its element's specific status effect
+# (burn/frost-slow/shock) — damage itself is untouched by this, still
+# reduced the same way it always was via GameData.get_elemental_resist_for()
+# inside take_damage(); this only ever blocks the non-damage side effect.
+# apply_slow() also carries plenty of non-frost callers (Danger Sense,
+# Pollen Puffer, generic slow hazards) — those pass no element at all and
+# are never affected by this.
+func _is_immune_to_status_element(element: String) -> bool:
+	if GameData.active_herb == null:
+		return false
+	match element:
+		"fire":
+			return GameData.active_herb.item_id == "herbElementalFire"
+		"frost":
+			return GameData.active_herb.item_id == "herbElementalFrost"
+		"elec":
+			return GameData.active_herb.item_id == "herbElementalElec"
+	return false
+
+# source: whatever's holding her (Ceiling Grabber, etc.) — her position gets
+# pinned to source.global_position + offset every physics frame until
+# release_trap() is called. Also sets is_stunned (blocks jump/dodge/normal
+# movement input the same as any other stun) but attacking is untouched —
+# escaping a trap by fighting back is the whole point, unlike a plain stun.
+func apply_trap(source: Node, offset: Vector2 = Vector2.ZERO) -> void:
+	if is_dodging:
+		return
+	is_stunned = true
+	is_trapped = true
+	_trap_anchor = source
+	_trap_offset = offset
+
+# Explicit release, not a timer — how long a trap lasts is entirely up to
+# whatever's holding her (breaking free, or it dying), not a fixed duration
+# like stun/freeze/shock.
+func release_trap() -> void:
+	is_trapped = false
+	is_stunned = false
+	_trap_anchor = null
+
+func apply_slow(factor: float, duration: float, element: String = "") -> void:
+	if is_dodging:
+		return
+	# element is only ever passed by genuinely frost-sourced callers (Frost
+	# Beam, Ice Wisp, Ice Plant Spitter's frost_bolt, ice_trail_patch) — the
+	# many non-elemental callers (Danger Sense, Pollen Puffer, generic slow
+	# hazards) pass nothing, so they're never touched by frost immunity.
+	if element != "" and _is_immune_to_status_element(element):
 		return
 	slow_factor = min(slow_factor, factor)
 	slow_timer = max(slow_timer, duration)
@@ -519,6 +599,13 @@ func apply_jump_weight(factor: float, duration: float) -> void:
 
 func apply_player_burn(damage_per_tick: int, ticks: int = 5) -> void:
 	if is_dodging:
+		return
+	# Standing in water douses it before it ever catches — same "wet =
+	# fireproof" logic Frost Beam's water-freeze interaction already relies
+	# on WaterCheck for elsewhere.
+	if _in_water:
+		return
+	if _is_immune_to_status_element("fire"):
 		return
 	burn_damage = max(burn_damage, damage_per_tick)
 	burn_ticks_remaining = max(burn_ticks_remaining, ticks)
@@ -582,6 +669,7 @@ func _tick_status_effects(delta: float) -> void:
 		if stun_timer <= 0.0:
 			is_stunned = false
 			is_frozen = false
+			is_shocked = false
 			_update_status_tint()
 	if slow_timer > 0.0:
 		slow_timer -= delta
@@ -898,6 +986,20 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
+	# Held by something (e.g. Ceiling Grabber's tongue) — position pinned
+	# directly to the source each frame, overriding normal physics entirely.
+	# Deliberately does NOT block the attack input path (that's read in
+	# _input(), a separate callback this early return never touches) — the
+	# whole point is she can still fight back while trapped, unlike a plain
+	# stun/freeze which happens to also block movement via the same flag
+	# this reuses (is_stunned) but isn't itself an attack-blocking measure.
+	if is_trapped:
+		velocity = Vector2.ZERO
+		if is_instance_valid(_trap_anchor):
+			global_position = _trap_anchor.global_position + _trap_offset
+		move_and_slide()
+		return
+
 	# Chain grapple pull — locked to the direction the chain was thrown, not
 	# steered toward the hook point each frame, so it drags her all the way
 	# through it instead of braking to a stop the moment she's merely close.
@@ -1032,6 +1134,13 @@ func _physics_process(delta):
 		if on_slippery_tile:
 			velocity.x = move_toward(velocity.x, direction * speed, SLIPPERY_ACCEL * delta)
 		else:
+			# direction is already forced to 0 while is_stunned (which
+			# apply_shock() sets), so this naturally hard-stops horizontal
+			# movement the instant she's shocked — no special case needed.
+			# Vertical velocity is untouched here either way, so gravity/
+			# falling momentum keeps going uninterrupted; that's the real
+			# distinction from apply_freeze(), which explicitly zeros the
+			# whole velocity vector (both axes) instead.
 			velocity.x = direction * speed
 
 	move_and_slide()

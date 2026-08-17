@@ -301,6 +301,12 @@ const HOLLOWSCALE_RECHARGE: float = 10.0
 # Blessing track, just a permanent flag set on her on_death().
 var ant_queen_defeated = false
 const HAZARD_DAMAGE_REDUCTION: float = 0.5
+# Single source of truth for how long Elana's "shocked" status (elana.gd's
+# apply_shock() — input blocked, momentum NOT zeroed, unlike stun/freeze)
+# lasts, shared by every electric source instead of each keeping its own
+# separate copy of the same number: Elemander's Electric Storm bolts
+# (elemander.gd) and electrified water (terrain_hazards.gd) both read this.
+const SHOCK_STUN_DURATION: float = 0.7
 var dev_no_cooldowns = false  # Dev toggle — forces every cooldown to stay at 0 while on
 var dev_fixed_zoom_1x = false  # Dev toggle — locks camera to 1x zoom instead of the dynamic system
 var screen_shake_enabled = true  # Dev toggle — heavy hits/impacts shake the camera

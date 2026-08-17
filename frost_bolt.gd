@@ -31,7 +31,7 @@ func _physics_process(delta: float) -> void:
 	if elana and global_position.distance_to(elana.global_position) <= HIT_RADIUS:
 		elana.take_damage(damage, false, self)
 		if elana.has_method("apply_slow"):
-			elana.apply_slow(slow_factor, slow_duration)
+			elana.apply_slow(slow_factor, slow_duration, "frost")
 		if elana.has_method("apply_freeze") and randf() < freeze_chance:
 			elana.apply_freeze(freeze_duration)
 		queue_free()

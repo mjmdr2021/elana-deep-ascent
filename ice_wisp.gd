@@ -20,4 +20,4 @@ func _tick_timers(delta: float) -> void:
 	super._tick_timers(delta)
 	var elana = get_tree().get_first_node_in_group("player")
 	if elana and global_position.distance_to(elana.global_position) <= aura_radius:
-		elana.apply_slow(aura_slow_factor, 0.3)
+		elana.apply_slow(aura_slow_factor, 0.3, "frost")
