@@ -908,6 +908,16 @@ func _run_fire_dash() -> void:
 
 	_body_sprite.visible = false
 	_head.visible = false
+	# The real body/Hurtbox physically relocates to back_pos and sits there
+	# invisible for the whole dash — still a live target otherwise (nothing
+	# else in this script ever touches these), so melee could still land a
+	# hit on an invisible boss sitting off to the side. Disabling both
+	# collision shapes here (same $CollisionShape2D.disabled convention
+	# ceiling_dropper.gd uses for its own dormant state) makes the real
+	# body genuinely untouchable for the dash's duration, not just hard to
+	# see. Restored once she's back in place at the end.
+	$CollisionShape2D.disabled = true
+	$Hurtbox/CollisionShape2D.disabled = true
 
 	# Phase 3 does more passes with a shorter warning each — captured once
 	# here rather than read live inside the loop, so a phase change landing
@@ -937,6 +947,8 @@ func _run_fire_dash() -> void:
 	_body_sprite.visible = true
 	_head.visible = true
 	position = _original_position
+	$CollisionShape2D.disabled = false
+	$Hurtbox/CollisionShape2D.disabled = false
 
 	# Tint clears after this check regardless of which branch runs — held
 	# through the punish window if one opens (previously it reset the
@@ -1452,10 +1464,21 @@ func blocks_chain_pull() -> bool:
 # one fixed spot, so the zap can connect near whichever part of him she's
 # actually standing near.
 func get_targeting_points() -> Array:
-	return [
+	var points: Array = [
 		$ElectricBoltPoint1/CollisionShape2D.global_position,
 		$ElectricBoltPoint2/CollisionShape2D.global_position,
 		$ElectricBoltPoint3/CollisionShape2D.global_position,
 		$ElectricBoltPoint4/CollisionShape2D.global_position,
 		$ElectricBoltPoint5/CollisionShape2D.global_position,
 	]
+	# Fire Dash's sweeping hitbox is the only part of him actually visible
+	# and near her during the dash — the real body (the 5 points above) sits
+	# invisible, collision-disabled, off at back_pos for the whole sequence
+	# (see _run_fire_dash()). Adding the dash collision's own live position
+	# as a 6th candidate, only while it's actually active, lets the zap
+	# reach the part of him she can actually see and stand near instead of
+	# only ever offering 5 points that are off-screen and out of range for
+	# the entire dash.
+	if _dash_collision.visible:
+		points.append(_dash_collision.global_position)
+	return points

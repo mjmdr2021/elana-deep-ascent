@@ -66,9 +66,7 @@ func on_hit(hit_direction: int, damage: int, is_magic: bool = false, _attacker: 
 	hp -= damage
 	GameData.spawn_damage_number(damage, global_position)
 	if hp <= 0:
-		GameData.mark_removed(get_tree().current_scene.scene_file_path, name)
-		drop_ores()
-		queue_free()
+		_on_threshold_reached()
 		return
 	if _flash_material != null:
 		_flash_material.set_shader_parameter("flash_amount", 1.0)
@@ -80,6 +78,14 @@ func on_hit(hit_direction: int, damage: int, is_magic: bool = false, _attacker: 
 			_flash_material.set_shader_parameter("flash_amount", 0.0)
 		else:
 			$ColorRect.color = original_color
+
+# Override point for subclasses (e.g. ore_mine.gd) — same "extends + override
+# one seam" pattern wood_debris.gd uses on vine_gate.gd's _is_valid_hit().
+# Default behavior is the original ore node: break permanently.
+func _on_threshold_reached() -> void:
+	GameData.mark_removed(get_tree().current_scene.scene_file_path, name)
+	drop_ores()
+	queue_free()
 
 func drop_ores():
 	var item_id: String = ORE_TYPE_IDS[ore_type]

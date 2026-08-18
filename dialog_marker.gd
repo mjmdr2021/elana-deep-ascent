@@ -216,6 +216,15 @@ func Boss1NormalEntrance(elana: Node) -> void:
 	if boss and is_instance_valid(boss) and boss.has_method("drop_entrance_gate"):
 		boss.drop_entrance_gate(ENTRANCE_GATE_POS)
 
+	# Camera lock/zoom/HP bar reveal — this entrance never used to trigger
+	# it at all (only the hole/drop entrance's BossCameraLock() did), which
+	# is the bug this closes: taking the normal entrance left the HP bar
+	# permanently hidden and the camera unlocked for the entire fight unless
+	# she also happened to cross the separate drop-entrance trigger zone,
+	# which the normal path doesn't reach. Shared with BossCameraLock() via
+	# _reveal_boss_camera_lock() rather than duplicated here.
+	_reveal_boss_camera_lock(boss)
+
 	GameData.camera_pan_active = false
 	GameData.in_cutscene = false
 
@@ -249,12 +258,21 @@ func BossCameraLock(elana: Node) -> void:
 
 		# Camera lock/zoom/HP bar reveal — deliberately AFTER Drop Push, not
 		# before or during it.
-		GameData.boss_zoom_active = true
-		GameData.camera_locked = true
-		if boss.has_method("get_camera_bounds"):
-			GameData.camera_bounds = boss.get_camera_bounds()
+		_reveal_boss_camera_lock(boss)
 
 	GameData.in_cutscene = false
+
+# Shared by BossCameraLock() (after its own Drop Push sequence) and
+# Boss1NormalEntrance() (right after its own landing-wait/gate-seal) — the
+# moment either entrance is considered "done," regardless of which one
+# actually got her into the arena.
+func _reveal_boss_camera_lock(boss: Node) -> void:
+	if not boss or not is_instance_valid(boss):
+		return
+	GameData.boss_zoom_active = true
+	GameData.camera_locked = true
+	if boss.has_method("get_camera_bounds"):
+		GameData.camera_bounds = boss.get_camera_bounds()
 
 func _shake_elana_into_arena(elana: Node) -> void:
 	if elana.has_method("apply_knockback"):

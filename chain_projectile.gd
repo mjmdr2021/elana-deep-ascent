@@ -205,7 +205,11 @@ func _on_area_entered(area: Area2D) -> void:
 				return
 			_pull_target = target
 			_pulling = true
-			monitoring = false
+			# Can't set monitoring directly here — this IS the area_entered
+			# callback, and Area2D is locked against monitoring changes for
+			# the duration of its own in/out signal dispatch. Deferred call
+			# applies it right after, once the engine's unlocked again.
+			set_deferred("monitoring", false)
 		else:
 			source._grapple_direction = direction
 			source._grapple_timer = _compute_grapple_timer(global_position)
