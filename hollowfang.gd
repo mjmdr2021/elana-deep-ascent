@@ -192,7 +192,7 @@ const TAIL_RAISED_ANGLE: float = -0.96  # ~-55 degrees
 
 enum State {
 	IDLE, TELEGRAPH_BITE, BITE,
-	RETREAT, TELEGRAPH_CHARGE, CHARGE_BITE,
+	TELEGRAPH_CHARGE, CHARGE_BITE,
 	TELEGRAPH_SPIT, SPIT,
 	WARN_TAIL_SLAM, TELEGRAPH_TAIL, TAIL_SLAM, CHARGE_HOLD, CHARGE_RETURN, BITE_HOLD, BITE_RETURN, BITE_STUNNED,
 	TELEGRAPH_EJECT, EJECT_HOLD, EJECT_SPIKES,
@@ -854,10 +854,6 @@ func _physics_process(delta: float) -> void:
 			_head.position = _charge_return_start_pos.lerp(_head_home_pos, t)
 			if _state_timer <= 0.0:
 				_start_recover()
-		State.RETREAT:
-			_state_timer -= delta
-			if _state_timer <= 0.0:
-				_start_charge_combo()
 		State.SPIT:
 			_state_timer -= delta
 			if _state_timer <= 0.0:
@@ -1132,11 +1128,6 @@ func _start_telegraph(next_state: State, duration: float) -> void:
 	_state_timer = duration
 	modulate = TELEGRAPH_TINT
 
-func _start_retreat() -> void:
-	state = State.RETREAT
-	_state_timer = 0.4
-	modulate = TELEGRAPH_TINT
-
 func _launch_telegraphed_attack() -> void:
 	modulate = Color.WHITE
 	_hit_this_attack = false
@@ -1265,7 +1256,13 @@ func apply_boss_damage(damage: int) -> void:
 	if hp <= 0:
 		return
 	hp -= damage
-	GameData.spawn_damage_number(damage, _head.global_position, Color(1.0, 0.9, 0.2))
+	# Consume-and-clear the same crit flag hit_handler.gd/elemander.gd's own
+	# _apply_damage() read — Hollowfang uses neither of those, but a melee
+	# crit against it would otherwise leave GameData.last_hit_is_crit stuck
+	# true, leaking a yellow crit-color number onto whatever gets hit next.
+	var number_color = GameData.CRIT_DAMAGE_COLOR if GameData.last_hit_is_crit else Color.WHITE
+	GameData.last_hit_is_crit = false
+	GameData.spawn_damage_number(damage, _head.global_position, number_color)
 	_flash_hit()
 	if hp <= 0:
 		_die()

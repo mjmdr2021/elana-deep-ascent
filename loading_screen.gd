@@ -16,6 +16,7 @@ const BG_COLOR: Color = Color(0.04, 0.04, 0.06)  # matches title_screen.gd's bac
 const TEXT_COLOR: Color = Color(0.92, 0.87, 0.72)  # matches title_screen.gd's title text
 
 var _target_scene: String = ""
+var _label: Label = null
 
 func _ready() -> void:
 	_build_ui()
@@ -64,17 +65,20 @@ func _build_ui() -> void:
 	spinner.set_script(LOADING_SPINNER_SCRIPT)
 	vbox.add_child(spinner)
 
-	var label = Label.new()
-	label.text = "Loading..."
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", 22)
-	label.add_theme_color_override("font_color", TEXT_COLOR)
-	vbox.add_child(label)
+	_label = Label.new()
+	_label.text = "Loading... 0%"
+	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_label.add_theme_font_size_override("font_size", 22)
+	_label.add_theme_color_override("font_color", TEXT_COLOR)
+	vbox.add_child(_label)
 
 func _process(_delta: float) -> void:
 	if _target_scene == "":
 		return
-	var status = ResourceLoader.load_threaded_get_status(_target_scene)
+	var progress: Array = []
+	var status = ResourceLoader.load_threaded_get_status(_target_scene, progress)
+	if not progress.is_empty():
+		_label.text = "Loading... %d%%" % int(round(float(progress[0]) * 100.0))
 	if status == ResourceLoader.THREAD_LOAD_LOADED:
 		var packed: PackedScene = ResourceLoader.load_threaded_get(_target_scene)
 		_target_scene = ""

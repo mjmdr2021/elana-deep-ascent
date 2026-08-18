@@ -436,13 +436,40 @@ func die():
 	GameData.hollowscale_cooldown = 0.0
 	GameData.danger_sense_cooldown = 0.0
 	_update_status_tint()
-	GameData.hp = GameData.max_hp
-	if GameData.respawn_scene != "":
-		GameData.just_died = true
-		get_tree().change_scene_to_file.call_deferred(GameData.respawn_scene)
+	# Death now rolls everything back to the last Ritual Node save (XP,
+	# inventory, room_state/kills, HP as it was at that save — not forced
+	# to full) instead of just relocating with whatever live state she had
+	# when she died. Same load path title_screen.gd's Continue uses.
+	if GameData.load_game():
+		HUD.refresh_slots()
+		HUD.set_hud_visible(GameData.received_stone_being_power)
+		var target_scene = GameData.default_scene
+		if GameData.respawn_scene != "":
+			target_scene = GameData.respawn_scene
+			# reset() (called inside load_game()) leaves use_default_spawn
+			# true — clear it so the next scene's spawn check falls through
+			# to just_died instead, landing her at respawn_position.
+			GameData.use_default_spawn = false
+			GameData.just_died = true
+		else:
+			GameData.use_default_spawn = true
+		# Routed through loading_screen.tscn instead of a direct
+		# change_scene_to_file() — same reason title_screen.gd's Continue/New
+		# Game do: that call is synchronous and blocks on the full_map.tscn
+		# load+instantiate with zero feedback, the loading screen threads it.
+		GameData.pending_scene_load = target_scene
+		get_tree().change_scene_to_file.call_deferred("res://loading_screen.tscn")
 	else:
-		GameData.use_default_spawn = true
-		get_tree().change_scene_to_file.call_deferred(GameData.default_scene)
+		# No save yet (died before ever reaching a Ritual Node) — nothing to
+		# roll back to, so fall back to the original live-state respawn.
+		# (HUD visibility already handled by the check earlier in this function.)
+		GameData.hp = GameData.max_hp
+		if GameData.respawn_scene != "":
+			GameData.just_died = true
+			get_tree().change_scene_to_file.call_deferred(GameData.respawn_scene)
+		else:
+			GameData.use_default_spawn = true
+			get_tree().change_scene_to_file.call_deferred(GameData.default_scene)
 
 # Public interface for observers (Glint) — avoids them re-deriving attack state
 func is_swinging() -> bool:
@@ -1655,8 +1682,12 @@ func _heavy_chain() -> void:
 	# Glint bonuses (crit/stacks/weapon dmg) — those are melee-only.
 	proj.damage = _melee_base_damage(GameData.weapon_heavy_multiplier)
 	proj.source = self
-	proj.global_position = global_position
+	# add_child() first: global_position on an unparented node is just its
+	# local position (no parent transform to resolve against yet), so setting
+	# it before parenting double-counts the level root's own offset once the
+	# node is added. Parent first, then set the real world position.
 	get_parent().add_child(proj)
+	proj.global_position = global_position
 
 func _apply_heavy_knockback(enemy: Node) -> void:
 	# _pending_knockback is a base_enemy.gd field — not every "enemies"-group

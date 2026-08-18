@@ -8,10 +8,14 @@ extends "res://enemy.gd"
 # target IS set), so setting enemy_type alone wouldn't actually be enough
 # to guarantee she never moves.
 #
-# - Eggs: lays one ant_egg.tscn near herself every egg_lay_interval seconds.
-#   Each egg has its own small hp pool and hatches into a Swarmer if not
-#   destroyed within its own hatch_time — see ant_egg.gd, same "destroy it
-#   or it hatches" shape as hollowfang_spit.gd's landed spits.
+# - Eggs: lays one ant_egg.tscn near herself every egg_lay_interval seconds,
+#   only while Elana's within egg_vicinity_radius and fewer than max_eggs are
+#   already out there. Each egg has its own small hp pool and hatches into a
+#   Swarmer if not destroyed — its hatch timer only counts down while Elana's
+#   within egg_hatch_vicinity_radius of the QUEEN (not the egg), so eggs from
+#   an ignored queen just sit banked instead of hatching offscreen. See
+#   ant_egg.gd, same "destroy it or it hatches" shape as hollowfang_spit.gd's
+#   landed spits, plus the vicinity gate.
 # - Harden: every harden_cooldown seconds, unconditionally grants herself
 #   armor_max_hp of "armor". While armor_hp > 0, modify_incoming_damage()
 #   (the same generic hit_handler.gd hook shield_bearer.gd uses for its
@@ -28,6 +32,10 @@ extends "res://enemy.gd"
 # range when it fires (checked again next interval, no catch-up/backlog).
 @export var egg_vicinity_radius: float = 250.0
 @export var egg_hatch_time: float = 10.0
+# Hatch timer only ticks while Elana is this close to the QUEEN (not the
+# egg) — copied onto every egg she lays, same as egg_hatch_time.
+@export var egg_hatch_vicinity_radius: float = 30.0
+@export var max_eggs: int = 10
 # Random X range (either side of her) eggs can land within along the ground
 # — a fresh roll each time, not a fixed spot every egg.
 @export var egg_lay_spread: float = 80.0
@@ -73,10 +81,12 @@ func _tick_eggs(delta: float) -> void:
 	_egg_timer -= delta
 	if _egg_timer <= 0.0:
 		_egg_timer = egg_lay_interval
-		if _player_in_egg_vicinity():
-			_lay_egg()
-		else:
+		if not _player_in_egg_vicinity():
 			print("[ant_queen] egg timer fired but player out of vicinity range (", egg_vicinity_radius, ")")
+		elif get_tree().get_nodes_in_group("ant_eggs").size() >= max_eggs:
+			print("[ant_queen] egg timer fired but egg cap (", max_eggs, ") already reached")
+		else:
+			_lay_egg()
 
 func _player_in_egg_vicinity() -> bool:
 	var player = get_tree().get_first_node_in_group("player")
@@ -91,12 +101,12 @@ const EGG_SPAWN_ATTEMPTS: int = 6
 # single attempt, every time, and eggs would just never lay at all.
 const EGG_GROUND_CHECK_MARGIN: float = 4.0
 
-# No cap on concurrent eggs — lays on schedule regardless of how many are
-# already out there. Y is her bottom edge (derived from the actual
-# collision shape's height, not a hardcoded offset) — ground level, not
-# dead-center. X is randomized within egg_lay_spread each time, not a fixed
-# spot every egg — terrain-checked so that randomization can't drop one
-# inside a wall.
+# Capped at max_eggs concurrent (checked by the caller before this ever
+# runs) — lays on schedule otherwise. Y is her bottom edge (derived from the
+# actual collision shape's height, not a hardcoded offset) — ground level,
+# not dead-center. X is randomized within egg_lay_spread each time, not a
+# fixed spot every egg — terrain-checked so that randomization can't drop
+# one inside a wall.
 func _lay_egg() -> void:
 	var half_height: float = ($CollisionShape2D.shape as RectangleShape2D).size.y / 2.0
 	var spawn_global: Vector2 = _find_clear_egg_spot(half_height)
@@ -104,6 +114,8 @@ func _lay_egg() -> void:
 		return  # every attempt landed in terrain this cycle — try again next interval
 	var egg = EGG_SCENE.instantiate()
 	egg.hatch_time = egg_hatch_time
+	egg.hatch_vicinity_radius = egg_hatch_vicinity_radius
+	egg.queen = self
 	# get_parent().to_local(...) — NOT self.to_local(...). The egg becomes a
 	# child of get_parent() (a sibling of the Queen), not a child of the
 	# Queen itself, so its local space needs to be relative to that same

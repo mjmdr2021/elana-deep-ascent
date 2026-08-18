@@ -48,6 +48,7 @@ func _pick_up() -> void:
 	match note_type:
 		NoteType.RITUAL_NODE_EXPLANATION:
 			GameData.add_item_to_inventory("note1")
+			HUD.refresh_slots()
 			HUD.show_dialogue(DialogueData.LORE_RITUAL_NODE_EXPLANATION, true)
 	# Freed immediately — the dialogue box is its own independent screen-
 	# space UI (HUD), not dependent on this node still existing to keep

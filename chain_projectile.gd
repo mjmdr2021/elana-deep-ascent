@@ -79,9 +79,12 @@ func _maybe_spawn_chain_segment() -> void:
 	var link = Sprite2D.new()
 	link.texture = CHAIN_LINK_TEXTURE
 	link.rotation = direction.angle()
-	link.global_position = global_position
 	link.z_index = -1
+	# add_child() first — see the matching comment in elana.gd::_heavy_chain().
+	# Setting global_position before parenting double-counts the level root's
+	# offset, which is exactly what made the chain links drift from the claw.
 	get_parent().add_child(link)
+	link.global_position = global_position
 	_chain_segments.append(link)
 
 # Fades and drops any segment the traveler (Elana during a wall-grapple, or

@@ -580,7 +580,6 @@ func _tick_frost_beam_windup(delta: float) -> void:
 		_frost_beam_endpoint.global_position = target.global_position + Vector2(0, FROST_BEAM_ENDPOINT_FEET_OFFSET)
 	if _frost_beam_windup_timer <= 0.0:
 		_start_frost_beam()
-		_start_frost_beam()
 
 func _start_frost_beam() -> void:
 	state = State.FROST_BEAM

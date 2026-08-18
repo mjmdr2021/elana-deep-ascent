@@ -8,6 +8,16 @@ extends Area2D
 
 @export var hp: int = 15
 @export var hatch_time: float = 10.0
+# Fallback only — ant_queen.gd overwrites this with its own
+# egg_hatch_vicinity_radius export on every egg it lays, same as hatch_time
+# above. Matters if an egg is ever hand-placed in a scene without a queen.
+@export var hatch_vicinity_radius: float = 30.0
+
+# Set by ant_queen.gd right after spawning — the hatch timer only ticks while
+# Elana is within hatch_vicinity_radius of THIS (her), not the egg itself, so
+# a queen can be ignored entirely and her eggs just sit banked, unhatched,
+# instead of quietly building an ambush while she's out of sight.
+var queen: Node = null
 
 var skip_removed_check: bool = false
 var _done: bool = false
@@ -15,14 +25,25 @@ var _hatch_timer: float = 0.0
 
 func _ready() -> void:
 	add_to_group("enemy_projectiles")
+	add_to_group("ant_eggs")
 	_hatch_timer = hatch_time
 
 func _physics_process(delta: float) -> void:
 	if _done:
 		return
+	if not _player_in_hatch_vicinity():
+		return
 	_hatch_timer -= delta
 	if _hatch_timer <= 0.0:
 		_hatch()
+
+# No queen reference (defensive — shouldn't happen via the normal spawn path)
+# fails safe as "never hatches" rather than hatching unconditionally.
+func _player_in_hatch_vicinity() -> bool:
+	if not is_instance_valid(queen):
+		return false
+	var player = get_tree().get_first_node_in_group("player")
+	return player != null and queen.global_position.distance_to(player.global_position) <= hatch_vicinity_radius
 
 func _hatch() -> void:
 	if _done:

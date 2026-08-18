@@ -33,6 +33,15 @@ const LANDING_WAIT_TIMEOUT: float = 3.0
 # slightly differently. Update this one value if the entrance ever moves.
 const ENTRANCE_GATE_POS: Vector2 = Vector2(-57, -200)
 
+# Guards against a second Boss1NormalEntrance() starting while the first is
+# still mid-flight — the existing camera_pan_intro_done/boss_alive check
+# only blocks replaying the intro after it's already finished, not
+# re-entering the trigger zone while it's still running. The sequence's own
+# knockback (_shake_elana_into_arena()) is physics-driven, not blocked by
+# GameData.in_cutscene, so if it ever carried her back across this same
+# zone mid-sequence, a second concurrent run would otherwise be possible.
+var _normal_entrance_running: bool = false
+
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 
@@ -55,6 +64,8 @@ func _on_body_entered(body: Node) -> void:
 			var boss = get_tree().get_first_node_in_group("bosses")
 			var boss_alive = boss != null and is_instance_valid(boss) and boss.hp > 0
 			if GameData.camera_pan_intro_done and not boss_alive:
+				return
+			if _normal_entrance_running:
 				return
 			GameData.camera_pan_intro_done = true
 			Boss1NormalEntrance(body)
@@ -155,6 +166,7 @@ func _start_air_dash_tutorial_cutscene(elana: Node) -> void:
 # (guarded by hollowfang.gd's own live-gate check), so whichever of the two
 # fires first is the one that actually seals it; the other is a no-op.
 func Boss1NormalEntrance(elana: Node) -> void:
+	_normal_entrance_running = true
 	GameData.in_cutscene = true
 	# Tells elana.gd's _update_camera_lock() to stay completely hands-off
 	# while this tween owns camera_offset_base — without this, that function
@@ -227,6 +239,7 @@ func Boss1NormalEntrance(elana: Node) -> void:
 
 	GameData.camera_pan_active = false
 	GameData.in_cutscene = false
+	_normal_entrance_running = false
 
 # Boss 1 Drop Entrance — a second, later beat once Elana's actually made her
 # way into the arena proper, not the instant the camera-pan reveal above

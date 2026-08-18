@@ -30,4 +30,12 @@ func _activate() -> void:
 	var tween := create_tween()
 	tween.tween_property($ColorRect, "color", Color.YELLOW, 1.0)
 	await get_tree().create_timer(1.0).timeout
+	# GameData is an autoload, so clearing in_cutscene here is safe even if
+	# this node got freed during the wait (e.g. a scene reload from dying
+	# mid-activation) — guarded anyway for consistency with dialog_marker.gd's
+	# cutscenes, and so any future edit that touches `self` after this point
+	# doesn't reopen that risk without a guard already in place.
+	if not is_instance_valid(self):
+		GameData.in_cutscene = false
+		return
 	GameData.in_cutscene = false

@@ -122,6 +122,16 @@ const LORE_RITUAL_NODE_EXPLANATION: Array = [
 	{"speaker": "Elana", "text": "and I start all over again."},
 ]
 
+# ── LoreWoodenSign (lore_wooden_sign.gd) ─────────────────────────────────────
+const LORE_WOODEN_SIGN: Array = [
+	{"speaker": "Elana", "text": "It's a sign."},
+	{"speaker": "Elana", "text": "It says..."},
+	{"speaker": "Elana", "text": "\"Cave entrance blocked.\""},
+	{"speaker": "Elana", "text": "\"Infested with ants...\""},
+	{"speaker": "Elana", "text": "...."},
+	{"speaker": "Elana", "text": "Why would they block it because of ants?"},
+]
+
 # ── Moleman (moleman.gd) ─────────────────────────────────────────────────────
 # talk_lines is still @export on moleman.gd — this is only the default value
 # for the first placed Moleman; other instances can override it entirely in
