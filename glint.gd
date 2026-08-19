@@ -74,8 +74,17 @@ func _process(delta: float) -> void:
 			_sprite.visible = true
 			_sprite.modulate = NATURAL_COLOR
 			_scout_camera.make_current()
+			# A stuck episode's cached recovery target (see
+			# _move_with_collision()) is picked differently per mode
+			# (nearest clear point while scouting, always Elana's position
+			# while attached) — clearing this on every mode transition
+			# stops a target picked under the other mode from lingering in
+			# across the switch.
+			_was_stuck_last_frame = false
 		_process_scouting(delta)
 		return
+	if _was_scouting:
+		_was_stuck_last_frame = false
 	_was_scouting = false
 	_hover_time += delta
 	if _dim_timer > 0.0:
@@ -176,57 +185,162 @@ func _process_scouting(delta: float) -> void:
 			var from_elana = intended - elana.global_position
 			if from_elana.length() > SCOUT_LEASH_RADIUS:
 				intended = elana.global_position + from_elana.normalized() * SCOUT_LEASH_RADIUS
-			global_position = _move_with_collision(global_position, intended, elana.global_position, delta)
+			global_position = _move_with_collision(global_position, intended, elana.global_position, delta, true)
 	_light.energy = lerp(_light.energy, 1.3, 0.12)
 
 # Shape-based block against terrain/solid obstacles (same layer Elana
-# collides with) — checks her actual BodyShape circle (see glint.tscn,
-# bigger than her 12x12 sprite) against terrain, not just a single point/
-# line, so her real visual extent can't overlap a wall, not only her exact
-# center. Used by both scouting (above) and the normal attached-follow
-# hover (see _update_position()) — she still moves/tethers toward Elana
-# either way, she just can't overlap a wall to get there.
+# collides with) — checks her actual BodyShape (see glint.tscn, a small
+# 8x8 square) against terrain rather than a single point/line. Deliberately
+# smaller than her 12x12 sprite, not bigger — an earlier bigger-than-sprite
+# shape (a 16px circle) made her read as "stuck" against geometry her
+# sprite visually only barely grazed, since the shape itself was catching
+# on corners well before anything looked wrong on screen. A smaller shape
+# means her sprite can very slightly overlap a wall at the edges before
+# collision kicks in, which reads as normal hover wobble rather than a bug
+# — a better trade than the opposite failure. Used by both scouting (above)
+# and the normal attached-follow hover (see _update_position()) — she still
+# moves/tethers toward Elana either way, she just can't overlap a wall
+# beyond that small margin to get there.
 const STUCK_NUDGE_SPEED: float = 60.0  # world px/sec — slow, deliberate escape
+
+# 8 compass directions, fixed order — used both to search a small nearby
+# area for a clear point and as local step candidates when the direct step
+# toward the current recovery target is itself blocked.
+# var, not const — .normalized() is a method call, not a constant
+# expression, so GDScript's const initializer rejects it at parse time
+# (confirmed: "Assigned value for constant _STUCK_DIRECTIONS isn't a
+# constant expression").
+var _STUCK_DIRECTIONS: Array[Vector2] = [
+	Vector2.RIGHT, Vector2(1, 1).normalized(), Vector2.DOWN, Vector2(-1, 1).normalized(),
+	Vector2.LEFT, Vector2(-1, -1).normalized(), Vector2.UP, Vector2(1, -1).normalized(),
+]
+# Kept deliberately small — "stuck" almost always means barely clipping a
+# corner/edge, not being deeply embedded far from any opening. A wide
+# search radius is the specific thing that went wrong in an earlier attempt
+# at this: it only checks whether a CANDIDATE point itself overlaps, not
+# whether a path to it does, so a big radius could "find" a point that
+# reads as clear but is only reachable by cutting through solid geometry to
+# get there (confirmed — that's what made her visibly cut through walls).
+# Capped at 3 rings of 8px (24px total) keeps any found point close enough
+# that there's essentially no room for a wall to meaningfully separate her
+# from it.
+const _STUCK_SEARCH_RING_STEP: float = 8.0
+const _STUCK_SEARCH_MAX_RINGS: int = 3
+
+# Cached per stuck episode, not recomputed every frame — recomputing fresh
+# each frame is what made an even earlier "nudge toward whichever direction
+# is clear" attempt flicker/oscillate and get reverted (see git history).
+# Reset on scouting/attached-follow mode transitions (_process()) so a
+# stale target from one mode can't leak into the other.
+var _stuck_recovery_target: Vector2 = Vector2.INF
+var _was_stuck_last_frame: bool = false
+
+func _shape_clear_at(space: PhysicsDirectSpaceState2D, pos: Vector2) -> bool:
+	var query := PhysicsShapeQueryParameters2D.new()
+	query.shape = _body_shape.shape
+	query.collision_mask = 1
+	query.transform = Transform2D(0.0, pos)
+	return space.intersect_shape(query, 1).is_empty()
+
+# Searches the small area above outward from `from` for the nearest
+# position her shape doesn't overlap terrain at. Falls back to `fallback`
+# (always Elana's position) if nothing turns up within that small radius.
+func _find_nearest_clear_point(space: PhysicsDirectSpaceState2D, from: Vector2, fallback: Vector2) -> Vector2:
+	for ring in range(1, _STUCK_SEARCH_MAX_RINGS + 1):
+		var radius: float = ring * _STUCK_SEARCH_RING_STEP
+		for dir in _STUCK_DIRECTIONS:
+			var candidate: Vector2 = from + dir * radius
+			if _shape_clear_at(space, candidate):
+				return candidate
+	return fallback
 
 # safe_pos is Elana's own current position — always guaranteed clear of
 # solid terrain, since SHE has real physics collision and can never be
-# inside a wall. Used as the recovery direction when Glint's already stuck
-# (see below). First attempt jumped 90% of the way there in one frame,
-# which looked sudden/clunky; then tried nudging toward whichever cardinal
-# direction was clear instead, which didn't work out either — back to
-# nudging toward safe_pos, but as a slow per-frame step instead of a snap.
-func _move_with_collision(from: Vector2, to: Vector2, safe_pos: Vector2, delta: float) -> Vector2:
+# inside a wall. use_nearest_safe_when_stuck (scouting only — see
+# _process_scouting()) retargets recovery to the nearest clear point
+# instead of always Elana's own position, since a straight trip back to
+# her could be a long way during a scouting excursion; attached-follow
+# mode doesn't need this since Elana is always right there anyway.
+#
+# Every recovery step below is validated with its own shape query before
+# being taken, whichever target is in play — an earlier version nudged
+# straight toward the target with NO check along the way at all, which
+# during scouting specifically (Elana potentially a whole leash-radius
+# away, in a different room) walked her directly through whatever solid
+# geometry was in between. First attempt at recovery jumped 90% of the way
+# there in one frame, which looked sudden/clunky; nudging toward safe_pos
+# at a slow speed fixed that, but not the through-walls bug — this fixes
+# both, plus (see the search consts above) keeps the nearest-point search
+# tight enough that the target itself can't end up on the wrong side of a
+# wall either.
+func _move_with_collision(from: Vector2, to: Vector2, safe_pos: Vector2, delta: float, use_nearest_safe_when_stuck: bool = false) -> Vector2:
 	var space = get_world_2d().direct_space_state
+	if not _shape_clear_at(space, from):
+		if not use_nearest_safe_when_stuck:
+			# Attached-follow: exact original behavior, byte-for-byte
+			# unchanged from the long-confirmed-working version — nudge
+			# straight toward Elana (always close by, so a straight line
+			# essentially never has anything meaningful to cross) at a
+			# fixed slow speed, no per-step validation. Deliberately kept
+			# isolated from the scouting logic below so nothing about
+			# tuning that path can ever regress this one again.
+			var to_safe: Vector2 = safe_pos - from
+			var step: float = STUCK_NUDGE_SPEED * delta
+			if to_safe.length() <= step:
+				return safe_pos
+			return from + to_safe.normalized() * step
+		# Scouting only, from here down: nearest-clear-point recovery
+		# target (cached per stuck episode), every step validated before
+		# being taken — see this function's own top comment for why.
+		if not _was_stuck_last_frame:
+			_stuck_recovery_target = _find_nearest_clear_point(space, from, safe_pos)
+		_was_stuck_last_frame = true
+		var step_len: float = STUCK_NUDGE_SPEED * delta
+		var toward_target: Vector2 = _stuck_recovery_target - from
+		# Try the direct step toward the (cached) target first — cheap,
+		# and correct for the common case where nothing's actually between
+		# her and it.
+		if toward_target.length() > 0.0:
+			var direct_step: Vector2 = from + toward_target.normalized() * min(step_len, toward_target.length())
+			if _shape_clear_at(space, direct_step):
+				return direct_step
+		# Direct path blocked — fall back to whichever of the 8 candidate
+		# directions is both clear AND makes the most progress toward the
+		# target, so she routes around an obstacle via only ever-validated
+		# steps instead of either stopping dead or cutting through it.
+		var best: Vector2 = from
+		var best_dist: float = from.distance_to(_stuck_recovery_target)
+		for dir in _STUCK_DIRECTIONS:
+			var candidate: Vector2 = from + dir * step_len
+			if not _shape_clear_at(space, candidate):
+				continue
+			var dist: float = candidate.distance_to(_stuck_recovery_target)
+			if dist < best_dist:
+				best_dist = dist
+				best = candidate
+		return best
+	_was_stuck_last_frame = false
+	if from == to:
+		return to
 	var shape_query := PhysicsShapeQueryParameters2D.new()
 	shape_query.shape = _body_shape.shape
 	shape_query.collision_mask = 1
-	# A shape-cast starting already overlapping terrain doesn't behave
-	# usefully for "where's the wall ahead" (standard physics-engine
-	# limitation — checks from inside a shape aren't a meaningful "am I
-	# about to hit this" query) — so if she's already stuck in a wall (very
-	# possible: her hover offset had zero wall-awareness until just now, so
-	# plenty of ordinary positions near a wall already overlap one), step
-	# toward the guaranteed-safe position at a fixed slow speed.
 	shape_query.transform = Transform2D(0.0, from)
-	if not space.intersect_shape(shape_query, 1).is_empty():
-		var to_safe: Vector2 = safe_pos - from
-		var step: float = STUCK_NUDGE_SPEED * delta
-		if to_safe.length() <= step:
-			return safe_pos
-		return from + to_safe.normalized() * step
-	if from == to:
-		return to
-	shape_query.transform = Transform2D(0.0, to)
-	if space.intersect_shape(shape_query, 1).is_empty():
-		return to
-	# Destination overlaps — fall back to a ray to find roughly where the
-	# wall starts, then back off by the shape's own radius (not a flat
-	# guess) so her actual body stays clear of it, not just her center.
-	var ray_query := PhysicsRayQueryParameters2D.create(from, to, 1)
-	var result := space.intersect_ray(ray_query)
-	if result:
-		return result["position"] - (to - from).normalized() * _body_shape.shape.radius
-	return from
+	# cast_motion() sweeps the shape from `from` along (to - from) in one
+	# call and returns the safe fraction of that move before it would hit
+	# anything — replaced a two-step "check the destination is clear, and
+	# if not, separately ray-cast to approximate where it's blocked" pair.
+	# That had a real gap (confirmed by testing): a destination overlap
+	# with a clean from->to centerline ray (e.g. her shape clipping a wall
+	# corner from a diagonal approach, where the ray itself passes through
+	# the gap beside it) fell through both checks and returned `from`
+	# unchanged — every frame recomputed the same result, freezing her in
+	# place instead of continuing to track Elana. cast_motion() answers
+	# "how far can this actual shape go" directly, with no ray-vs-shape
+	# approximation gap to fall through.
+	shape_query.motion = to - from
+	var safe_fraction: float = space.cast_motion(shape_query)[0]
+	return from + shape_query.motion * safe_fraction
 
 # Public — cutscenes trigger a gold glow that persists until stop_story_glow()
 # is called, without fighting _update_color's per-frame overwrite. Same

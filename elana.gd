@@ -414,7 +414,20 @@ func die():
 	# Freezes her (movement/input) for the wait — die() already clears this
 	# as part of its normal cleanup right after, so nothing extra to reset.
 	GameData.in_cutscene = true
+	# Also pauses the whole tree — show_death_screen() previously only froze
+	# Elana (via in_cutscene) while every enemy/hazard/timer kept fully
+	# simulating for however long the death screen was up. Confirmed bug:
+	# an enemy dying from a DoT tick (or any other GameData-mutating event)
+	# during that wait would have its state silently discarded the instant
+	# GameData.load_and_prepare_respawn() below rewinds everything to the
+	# last save — XP/kill-credit/flags like ant_queen_defeated could be lost
+	# even though they genuinely happened in this session. Same get_tree().
+	# paused pattern hud.gd's options menu already uses; HUD is process_mode
+	# ALWAYS so the death screen's own input handling keeps working while
+	# paused.
+	get_tree().paused = true
 	await HUD.show_death_screen()
+	get_tree().paused = false
 	GameData.clear_combat_stacks()
 	GameData.glint_scouting = false
 	GameData.glint_scout_returning = false
@@ -439,25 +452,17 @@ func die():
 	# Death now rolls everything back to the last Ritual Node save (XP,
 	# inventory, room_state/kills, HP as it was at that save — not forced
 	# to full) instead of just relocating with whatever live state she had
-	# when she died. Same load path title_screen.gd's Continue uses.
-	if GameData.load_game():
+	# when she died. Same load_and_prepare_respawn() helper title_screen.gd's
+	# Continue uses.
+	if GameData.load_and_prepare_respawn():
 		HUD.refresh_slots()
 		HUD.set_hud_visible(GameData.received_stone_being_power)
-		var target_scene = GameData.default_scene
-		if GameData.respawn_scene != "":
-			target_scene = GameData.respawn_scene
-			# reset() (called inside load_game()) leaves use_default_spawn
-			# true — clear it so the next scene's spawn check falls through
-			# to just_died instead, landing her at respawn_position.
-			GameData.use_default_spawn = false
-			GameData.just_died = true
-		else:
-			GameData.use_default_spawn = true
 		# Routed through loading_screen.tscn instead of a direct
 		# change_scene_to_file() — same reason title_screen.gd's Continue/New
 		# Game do: that call is synchronous and blocks on the full_map.tscn
 		# load+instantiate with zero feedback, the loading screen threads it.
-		GameData.pending_scene_load = target_scene
+		# Deferred here (unlike title_screen.gd's own call) since this fires
+		# mid-physics-frame from die(), not from a button press.
 		get_tree().change_scene_to_file.call_deferred("res://loading_screen.tscn")
 	else:
 		# No save yet (died before ever reaching a Ritual Node) — nothing to

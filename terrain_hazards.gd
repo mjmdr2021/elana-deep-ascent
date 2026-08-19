@@ -25,6 +25,14 @@ const FEET_OFFSET: float = 20.0  # Elana's origin isn't at her feet — sample b
 
 var _molten_tick_timer: float = 0.0
 var _electrified_tick_timer: float = 0.0
+# Cached once in _ready() — a TileMap's own layer count can't change at
+# runtime, so re-deriving it from get_layers_count() at every call site
+# (previously 5, 3 of them every single physics frame in _process()) was
+# pure repeated cost for an answer that never changes for the life of the
+# scene.
+var _has_molten_overlay: bool = false
+var _has_slippery_overlay: bool = false
+var _has_electrified_overlay: bool = false
 
 # Overrides whatever alpha you set in the editor — tinted so every cell an
 # attack paints onto an overlay is visible exactly where it is, rather than
@@ -36,12 +44,17 @@ func _ready() -> void:
 	# catchable exception) on a layer index that doesn't exist yet — same
 	# guard _process() already needs for get_cell_source_id(), so a TileMap
 	# that hasn't had the overlay layers added yet (e.g. a fresh test scene)
-	# fails safe instead of crashing on load.
-	if get_layers_count() > MOLTEN_OVERLAY_LAYER:
+	# fails safe instead of crashing on load. Cached here, once, instead of
+	# re-checked at every call site (see the vars' own comment above).
+	var layers: int = get_layers_count()
+	_has_molten_overlay = layers > MOLTEN_OVERLAY_LAYER
+	_has_slippery_overlay = layers > SLIPPERY_OVERLAY_LAYER
+	_has_electrified_overlay = layers > ELECTRIFIED_OVERLAY_LAYER
+	if _has_molten_overlay:
 		set_layer_modulate(MOLTEN_OVERLAY_LAYER, Color(1.0, 0.4, 0.1, 0.6))
-	if get_layers_count() > SLIPPERY_OVERLAY_LAYER:
+	if _has_slippery_overlay:
 		set_layer_modulate(SLIPPERY_OVERLAY_LAYER, Color(0.4, 0.85, 1.0, 0.6))
-	if get_layers_count() > ELECTRIFIED_OVERLAY_LAYER:
+	if _has_electrified_overlay:
 		set_layer_modulate(ELECTRIFIED_OVERLAY_LAYER, Color(1.0, 1.0, 0.2, 0.7))
 	# Ant Queen's death reward (elana.gd's take_damage()) only halves damage
 	# from an attacker tagged "hazards" — molten damage below was passing
@@ -61,10 +74,11 @@ func _process(delta: float) -> void:
 	# catchable exception) on a layer index that doesn't exist yet — guarded
 	# the same way the electrified layer below already was, so a TileMap
 	# that hasn't had the overlay layers added yet (e.g. a fresh test scene)
-	# fails safe instead of crashing every frame.
-	var overlay_molten = get_layers_count() > MOLTEN_OVERLAY_LAYER \
+	# fails safe instead of crashing every frame. Uses the cached bool from
+	# _ready() instead of re-querying get_layers_count() every frame.
+	var overlay_molten = _has_molten_overlay \
 		and get_cell_source_id(MOLTEN_OVERLAY_LAYER, cell) != -1
-	var overlay_slippery = get_layers_count() > SLIPPERY_OVERLAY_LAYER \
+	var overlay_slippery = _has_slippery_overlay \
 		and get_cell_source_id(SLIPPERY_OVERLAY_LAYER, cell) != -1
 	# Electrified is about being IN a body of water, not standing ON a
 	# hazardous floor tile — water can be several tiles deep with solid
@@ -79,8 +93,9 @@ func _process(delta: float) -> void:
 	# get_cell_source_id() hard-crashes (out-of-bounds C++ error, not a
 	# catchable exception) on a layer index that doesn't exist yet — guard
 	# against the 4th layer not being added yet instead of taking the whole
-	# game down over one missing editor step.
-	var overlay_electrified = get_layers_count() > ELECTRIFIED_OVERLAY_LAYER \
+	# game down over one missing editor step. Uses the cached bool from
+	# _ready() instead of re-querying get_layers_count() every frame.
+	var overlay_electrified = _has_electrified_overlay \
 		and get_cell_source_id(ELECTRIFIED_OVERLAY_LAYER, water_cell) != -1
 
 	if "on_slippery_tile" in elana:

@@ -1118,6 +1118,29 @@ func load_game() -> bool:
 	_apply_weapon_stats("fist")
 	return true
 
+# Shared by title_screen.gd's Continue and elana.gd's die() — both need to
+# load the last save, then land the player back at wherever they last saved
+# (a Ritual Node's respawn_scene/position if one's set, otherwise a fresh
+# default_scene spawn), and queue that scene for loading_screen.tscn to pick
+# up. Used to be two near-identical hand-copies of this exact decision tree;
+# extracted here so a future change to the load/respawn logic only needs to
+# happen once. Deliberately doesn't touch the scene tree itself (HUD refresh
+# and the actual change_scene_to_file call stay with each caller) since one
+# needs the scene change deferred and the other doesn't.
+func load_and_prepare_respawn() -> bool:
+	if not load_game():
+		return false
+	if respawn_scene != "":
+		# reset() (called inside load_game()) leaves use_default_spawn true —
+		# clear it so the next scene's spawn check falls through to
+		# just_died instead, landing the player at respawn_position.
+		use_default_spawn = false
+		just_died = true
+	else:
+		use_default_spawn = true
+	pending_scene_load = respawn_scene if respawn_scene != "" else default_scene
+	return true
+
 # Lives here (AutoLoad) so the unfreeze survives scene changes — if Elana owns
 # the coroutine and is freed mid-hitstop, time_scale stays 0 forever.
 func hitstop(duration: float = 0.07) -> void:
@@ -1192,6 +1215,18 @@ const CRIT_DAMAGE_COLOR: Color = Color(1.0, 0.9, 0.15)
 
 func spawn_damage_number(amount: int, pos: Vector2, color: Color = Color.WHITE) -> void:
 	spawn_float_text(str(amount), pos, color)
+
+# Consume-and-clear last_hit_is_crit and spawn the resulting number in one
+# call — hit_handler.gd, hollowfang.gd, and elemander.gd each independently
+# hand-copied this exact "yellow if crit, else white, then clear the flag"
+# sequence (any enemy not routed through hit_handler.gd needed its own
+# copy or the flag would leak into whatever gets hit next). One shared
+# place now, so a future change to crit-color logic only needs to happen
+# once instead of three times staying in sync by hand.
+func spawn_crit_aware_damage_number(amount: int, pos: Vector2) -> void:
+	var color: Color = CRIT_DAMAGE_COLOR if last_hit_is_crit else Color.WHITE
+	last_hit_is_crit = false
+	spawn_damage_number(amount, pos, color)
 
 func spawn_float_text(text: String, pos: Vector2, color: Color = Color.WHITE) -> void:
 	var label = Label.new()

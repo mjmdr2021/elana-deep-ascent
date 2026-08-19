@@ -58,8 +58,14 @@ extends Node2D
 # happens on demand rather than every frame.
 
 # World-space rectangle this fog covers — must contain everywhere the player
-# can go in this scene. Tune per-scene in the Inspector; too small clips
-# exploration at the edges, too large wastes mask resolution.
+# can go in this scene. Auto-expanded in _ready() to the terrain TileMap's
+# own actual painted bounds (see _auto_expand_world_rect_to_terrain()), so
+# this exported value only matters as a starting floor/manual override —
+# it used to be the sole source of truth, hand-estimated from a spot-check
+# of node positions, and that estimate ran out of vertical room in the real
+# map (confirmed: a room above its top edge rendered as permanently stuck
+# black — anywhere outside world_rect can never be erased or sampled at
+# all, no matter how much she explores it, regardless of the shader).
 @export var world_rect: Rect2 = Rect2(-200, -200, 700, 500)
 # 1 mask pixel per this many world pixels — lower = smoother/finer erased
 # trail but a bigger mask image to paint/store/persist.
@@ -129,6 +135,8 @@ func _ready() -> void:
 		if sibling is TileMap:
 			_terrain = sibling
 			break
+	if _terrain != null:
+		_auto_expand_world_rect_to_terrain()
 	_mask_size = Vector2i((world_rect.size / mask_scale).ceil())
 	window_size = Vector2i(min(window_size.x, _mask_size.x), min(window_size.y, _mask_size.y))
 	_full_image = Image.create(_mask_size.x, _mask_size.y, false, Image.FORMAT_LA8)
@@ -143,6 +151,25 @@ func _ready() -> void:
 
 	_recenter_window((_mask_size - window_size) / 2)
 	_boot_cover.visible = false
+
+# World px of safety padding beyond the tilemap's own painted bounds —
+# covers spawn/camera positions right at the map's edge without needing
+# the tilemap itself to paint any tiles out there.
+const WORLD_RECT_MARGIN: float = 200.0
+
+# Grows (never shrinks) world_rect to cover the terrain TileMap's actual
+# used cells, converted to world space — see world_rect's own comment for
+# why this replaced a hand-maintained number. Safe to call even on an
+# empty/all-air TileMap (get_used_rect() returns a zero-size rect then,
+# left alone rather than collapsing world_rect down to nothing).
+func _auto_expand_world_rect_to_terrain() -> void:
+	var used_cells: Rect2i = _terrain.get_used_rect()
+	if used_cells.size == Vector2i.ZERO:
+		return
+	var cell_size: Vector2 = Vector2(_terrain.tile_set.tile_size)
+	var top_left: Vector2 = _terrain.to_global(Vector2(used_cells.position) * cell_size) - Vector2.ONE * WORLD_RECT_MARGIN
+	var bottom_right: Vector2 = _terrain.to_global(Vector2(used_cells.position + used_cells.size) * cell_size) + Vector2.ONE * WORLD_RECT_MARGIN
+	world_rect = world_rect.merge(Rect2(top_left, bottom_right - top_left))
 
 func _physics_process(delta: float) -> void:
 	var elana = get_tree().get_first_node_in_group("player")
@@ -216,6 +243,7 @@ func _ensure_window_covers_view() -> void:
 	required_size.x = min(required_size.x, _mask_size.x)
 	required_size.y = min(required_size.y, _mask_size.y)
 	var camera_local: Vector2 = (camera_world_origin + visible_world_size / 2.0 - world_rect.position) / mask_scale
+	var visible_half_mask: Vector2 = (visible_world_size / mask_scale) / 2.0
 	if required_size.x > window_size.x or required_size.y > window_size.y:
 		# Only ever grows, never shrinks back down once zoomed back in —
 		# keeps this simple (no texture-recreation churn from repeatedly
@@ -228,16 +256,28 @@ func _ensure_window_covers_view() -> void:
 		_overlay_material.set_shader_parameter("window_tex", _window_texture)
 		_recenter_window(Vector2i(camera_local) - window_size / 2)
 		return
-	_maybe_recenter_on(camera_local)
+	_maybe_recenter_on(camera_local, visible_half_mask)
 
-# Recenters the display window on this LOCAL (mask-pixel) position if it's
-# within window_recenter_margin of the window's current edge. Cheap to
-# call every frame — the check itself is just arithmetic; the recopy+
-# reupload it can trigger is bounded by window_size, not map size.
-func _maybe_recenter_on(local_pos: Vector2) -> void:
+# Recenters the display window on this LOCAL (mask-pixel) position if the
+# CAMERA'S OWN VISIBLE RECT — not just its center point — has come within
+# window_recenter_margin of the window's current edge. Cheap to call every
+# frame — the check itself is just arithmetic; the recopy+reupload it can
+# trigger is bounded by window_size, not map size.
+#
+# visible_half_mask (the camera's own half-width/half-height, in mask px)
+# has to be subtracted from the safe zone here — a real bug had this
+# checking only how close the camera's CENTER was to the window's edge,
+# with just a small fixed margin. At zoom 4 on a 1920x1080 viewport the
+# camera's own visible half-size is ~40x34 mask px, dwarfing the old fixed
+# 16px margin — so by the time the center point tripped the old check, the
+# camera's actual outer edge had already been sitting outside the window's
+# loaded data for a while, rendering as a hard-edged black patch on
+# whichever side she'd been moving toward (confirmed by testing: reproduced
+# during Glint scouting, worst along her direction of travel).
+func _maybe_recenter_on(local_pos: Vector2, visible_half_mask: Vector2) -> void:
 	var margin_px: float = window_recenter_margin / mask_scale
-	var min_edge: Vector2 = Vector2(_window_origin) + Vector2(margin_px, margin_px)
-	var max_edge: Vector2 = Vector2(_window_origin + window_size) - Vector2(margin_px, margin_px)
+	var min_edge: Vector2 = Vector2(_window_origin) + visible_half_mask + Vector2(margin_px, margin_px)
+	var max_edge: Vector2 = Vector2(_window_origin + window_size) - visible_half_mask - Vector2(margin_px, margin_px)
 	if local_pos.x >= min_edge.x and local_pos.x <= max_edge.x \
 			and local_pos.y >= min_edge.y and local_pos.y <= max_edge.y:
 		return
@@ -291,10 +331,26 @@ func _visible_cells(origin_cell: Vector2i, max_radius: int) -> Dictionary:
 	# the slope math decides — cells right next to the origin are exactly
 	# where shadowcasting's slope comparisons are most prone to edge-case
 	# misses (confirmed by testing: an isolated black square right next to
-	# her with nothing actually blocking it).
+	# her with nothing actually blocking it). Still wall-aware though: a
+	# diagonal neighbor only gets forced visible if it isn't itself solid
+	# AND isn't cut off by a solid corner (both of its orthogonal neighbors
+	# blocking) — skipping that check let this ring reveal a diagonally
+	# adjacent room straight through a single-tile wall corner, which real
+	# cave layouts have plenty of (confirmed: violated this file's own
+	# "never reveal unseen areas" guarantee). Cardinal neighbors don't need
+	# the same guard — a cardinal neighbor being solid just marks a wall
+	# tile explored, not a floor tile behind it.
 	for dx in range(-1, 2):
 		for dy in range(-1, 2):
-			visible[origin_cell + Vector2i(dx, dy)] = true
+			var cell: Vector2i = origin_cell + Vector2i(dx, dy)
+			if dx != 0 and dy != 0:
+				if _is_blocking_cell(cell):
+					continue
+				var corner_cut: bool = _is_blocking_cell(origin_cell + Vector2i(dx, 0)) \
+						and _is_blocking_cell(origin_cell + Vector2i(0, dy))
+				if corner_cut:
+					continue
+			visible[cell] = true
 	return visible
 
 func _scan_octant(origin: Vector2i, start_row: int, start_slope: float, end_slope: float,

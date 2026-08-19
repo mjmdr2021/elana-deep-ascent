@@ -173,7 +173,10 @@ func _on_new_game() -> void:
 	get_tree().change_scene_to_file("res://loading_screen.tscn")
 
 func _on_continue() -> void:
-	if not GameData.load_game():
+	# Loads the save and prepares target_scene/use_default_spawn/just_died —
+	# see GameData.load_and_prepare_respawn()'s own comment; elana.gd's
+	# die() shares this same helper now instead of a hand-copy of it.
+	if not GameData.load_and_prepare_respawn():
 		return
 	# load_game() sets GameData's inventory/quickslot data directly — the
 	# HUD's slot icons don't repaint themselves from that alone (they only
@@ -185,19 +188,7 @@ func _on_continue() -> void:
 	# save predates the Stone Being (shouldn't normally happen since saves
 	# only happen at Ritual Nodes, but keeps this correct either way).
 	HUD.set_hud_visible(GameData.received_stone_being_power)
-	var target_scene = GameData.default_scene
-	if GameData.respawn_scene != "":
-		target_scene = GameData.respawn_scene
-		# reset() (called inside load_game()) leaves use_default_spawn true —
-		# clear it so elana.gd's spawn check falls through to just_died
-		# instead, reusing the same "respawn at last checkpoint" logic death
-		# already drives, dropping her at respawn_position.
-		GameData.use_default_spawn = false
-		GameData.just_died = true
-	else:
-		GameData.use_default_spawn = true
 	# Same threaded hand-off as _on_new_game() — see its comment above.
-	GameData.pending_scene_load = target_scene
 	get_tree().change_scene_to_file("res://loading_screen.tscn")
 
 func _on_settings() -> void:

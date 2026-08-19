@@ -20,7 +20,12 @@ func _process(_delta: float) -> void:
 		_read()
 
 func _update_read_hint() -> void:
-	if player_inside:
+	# Gated the same as the interact check below — without this, the hint
+	# ignored GameData.in_cutscene entirely and re-showed itself every
+	# frame the dialogue box was open (she's still standing right next to
+	# the sign, so player_inside stays true), fighting the one-time
+	# HUD.hide_prompt() call _read() makes right when she presses E.
+	if player_inside and not GameData.in_cutscene:
 		HUD.show_prompt("E to read", self, _prompt_id)
 	else:
 		HUD.hide_prompt(_prompt_id)

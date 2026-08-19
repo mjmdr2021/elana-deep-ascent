@@ -77,12 +77,12 @@ func _apply_damage(hit_direction: int, damage: int) -> int:
 	_enemy.hp -= final_damage
 	_enemy.regen_delay_timer = 3.0
 	# Consume-and-clear: elana.gd's crit rolls set this immediately before
-	# calling on_hit()/on_elemental_hit(), and this is the one place that
-	# ever spawns the resulting damage number, so it can't leak into an
-	# unrelated later hit (DoT tick, another enemy's on_hit, etc.).
-	var number_color = GameData.CRIT_DAMAGE_COLOR if GameData.last_hit_is_crit else Color.WHITE
-	GameData.last_hit_is_crit = false
-	GameData.spawn_damage_number(final_damage, _enemy.global_position, number_color)
+	# calling on_hit()/on_elemental_hit(); GameData.spawn_crit_aware_damage_
+	# number() reads+clears it so it can't leak into an unrelated later hit
+	# (DoT tick, another enemy's on_hit, etc.) — bosses that don't route
+	# through this shared component (hollowfang.gd, elemander.gd) call the
+	# same GameData helper directly for the same reason.
+	GameData.spawn_crit_aware_damage_number(final_damage, _enemy.global_position)
 	return final_damage
 
 func _die(attacker: Node = null) -> void:

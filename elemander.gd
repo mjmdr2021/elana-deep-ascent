@@ -1391,13 +1391,11 @@ func _apply_damage(damage: int) -> void:
 	if hp <= 0:
 		return
 	hp -= damage
-	# Consume-and-clear the same crit flag hit_handler.gd reads — Elemander
-	# doesn't use that shared component, but a melee crit against it would
-	# otherwise leave GameData.last_hit_is_crit stuck true, leaking a yellow
-	# damage number onto whatever enemy gets hit next.
-	var number_color = GameData.CRIT_DAMAGE_COLOR if GameData.last_hit_is_crit else Color.WHITE
-	GameData.last_hit_is_crit = false
-	GameData.spawn_damage_number(damage, global_position, number_color)
+	# Elemander doesn't route through hit_handler.gd (too different a
+	# shape), so it calls the same shared GameData.spawn_crit_aware_damage_
+	# number() hit_handler.gd/hollowfang.gd use, instead of hand-copying
+	# the consume-and-clear logic.
+	GameData.spawn_crit_aware_damage_number(damage, global_position)
 	if hp <= 0:
 		hp = 0
 		_die()

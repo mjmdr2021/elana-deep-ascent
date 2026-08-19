@@ -1256,13 +1256,11 @@ func apply_boss_damage(damage: int) -> void:
 	if hp <= 0:
 		return
 	hp -= damage
-	# Consume-and-clear the same crit flag hit_handler.gd/elemander.gd's own
-	# _apply_damage() read — Hollowfang uses neither of those, but a melee
-	# crit against it would otherwise leave GameData.last_hit_is_crit stuck
-	# true, leaking a yellow crit-color number onto whatever gets hit next.
-	var number_color = GameData.CRIT_DAMAGE_COLOR if GameData.last_hit_is_crit else Color.WHITE
-	GameData.last_hit_is_crit = false
-	GameData.spawn_damage_number(damage, _head.global_position, number_color)
+	# Hollowfang doesn't route through hit_handler.gd (too different a
+	# shape — see this file's own header comment), so it calls the same
+	# shared GameData.spawn_crit_aware_damage_number() hit_handler.gd and
+	# elemander.gd use, instead of hand-copying the consume-and-clear logic.
+	GameData.spawn_crit_aware_damage_number(damage, _head.global_position)
 	_flash_hit()
 	if hp <= 0:
 		_die()

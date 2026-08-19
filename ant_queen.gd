@@ -83,7 +83,7 @@ func _tick_eggs(delta: float) -> void:
 		_egg_timer = egg_lay_interval
 		if not _player_in_egg_vicinity():
 			print("[ant_queen] egg timer fired but player out of vicinity range (", egg_vicinity_radius, ")")
-		elif get_tree().get_nodes_in_group("ant_eggs").size() >= max_eggs:
+		elif _own_eggs().size() >= max_eggs:
 			print("[ant_queen] egg timer fired but egg cap (", max_eggs, ") already reached")
 		else:
 			_lay_egg()
@@ -91,6 +91,17 @@ func _tick_eggs(delta: float) -> void:
 func _player_in_egg_vicinity() -> bool:
 	var player = get_tree().get_first_node_in_group("player")
 	return player != null and global_position.distance_to(player.global_position) <= egg_vicinity_radius
+
+# Scoped to eggs THIS queen laid (egg.queen == self), not every egg in the
+# scene — the global "ant_eggs" group check used to count every queen's
+# eggs against every queen's own max_eggs cap, so a second Ant Queen placed
+# in the same scene would have had her laying silently throttled by the
+# first queen's eggs. Only one queen exists in full_map.tscn today, so this
+# was latent, but @export var max_eggs living on each queen instance already
+# implied a per-queen cap. Also reused by on_death() below to clean up
+# exactly this queen's own leftover eggs, not a future queen's.
+func _own_eggs() -> Array:
+	return get_tree().get_nodes_in_group("ant_eggs").filter(func(egg): return egg.queen == self)
 
 const EGG_SPAWN_ATTEMPTS: int = 6
 # The terrain-clearance check below is offset this far ABOVE the candidate's
@@ -150,6 +161,13 @@ func _find_clear_egg_spot(half_height: float) -> Vector2:
 func on_death() -> void:
 	GameData.ant_queen_defeated = true
 	GameData.spawn_float_text("Hazard Resist +50%!", global_position, Color(0.9, 0.8, 0.3))
+	# Any of her own eggs still around get freed with her — an egg's hatch
+	# timer only progresses while its queen reference is valid (see
+	# ant_egg.gd's _player_in_hatch_vicinity()), so leaving them here would
+	# strand them permanently un-hatchable instead of resolving the
+	# "destroy it or it hatches" tension her death already settled.
+	for egg in _own_eggs():
+		egg.queue_free()
 
 func _tick_harden(delta: float) -> void:
 	_harden_timer -= delta
