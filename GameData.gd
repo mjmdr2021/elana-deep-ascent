@@ -280,6 +280,10 @@ var active_ritual_node = ""
 # nothing and respawn/Continue always fell through to wherever Elana's node
 # happened to sit in the scene. Each Ritual Node writes its own position here.
 var respawn_position: Vector2 = Vector2.ZERO
+# Base64-encoded PNG — fog_of_war.gd's permanent "explored trail" mask.
+# Round-tripped as a plain string so it fits the existing JSON save format
+# without a schema change; fog_of_war.gd owns actually reading/painting it.
+var fog_mask_png: String = ""
 var just_died = false
 var default_scene = "res://full_map.tscn"
 var default_spawn_id = "SpawnDefault"
@@ -962,6 +966,7 @@ func reset() -> void:
 	respawn_scene = ""
 	active_ritual_node = ""
 	respawn_position = Vector2.ZERO
+	fog_mask_png = ""
 	just_died = false
 	use_default_spawn = true
 	room_state = {}
@@ -1038,6 +1043,7 @@ func save_game() -> void:
 		"herb_pickup_hint_shown": herb_pickup_hint_shown,
 		"ore_break_hint_shown": ore_break_hint_shown,
 		"glint_scout_return_hint_shown": glint_scout_return_hint_shown,
+		"fog_mask_png": fog_mask_png,
 	}
 	var file = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
@@ -1081,6 +1087,7 @@ func load_game() -> bool:
 	var pos_arr = parsed.get("respawn_position", null)
 	if pos_arr is Array and pos_arr.size() == 2:
 		respawn_position = Vector2(pos_arr[0], pos_arr[1])
+	fog_mask_png = parsed.get("fog_mask_png", fog_mask_png)
 	active_ritual_node = parsed.get("active_ritual_node", active_ritual_node)
 	default_scene = parsed.get("default_scene", default_scene)
 	default_spawn_id = parsed.get("default_spawn_id", default_spawn_id)

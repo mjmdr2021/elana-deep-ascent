@@ -32,9 +32,17 @@ var _electrified_tick_timer: float = 0.0
 # same tile picture as the real floor underneath, this reads as "that exact
 # tile is glowing," not a mismatched shape.
 func _ready() -> void:
-	set_layer_modulate(MOLTEN_OVERLAY_LAYER, Color(1.0, 0.4, 0.1, 0.6))
-	set_layer_modulate(SLIPPERY_OVERLAY_LAYER, Color(0.4, 0.85, 1.0, 0.6))
-	set_layer_modulate(ELECTRIFIED_OVERLAY_LAYER, Color(1.0, 1.0, 0.2, 0.7))
+	# set_layer_modulate() hard-crashes (out-of-bounds C++ error, not a
+	# catchable exception) on a layer index that doesn't exist yet — same
+	# guard _process() already needs for get_cell_source_id(), so a TileMap
+	# that hasn't had the overlay layers added yet (e.g. a fresh test scene)
+	# fails safe instead of crashing on load.
+	if get_layers_count() > MOLTEN_OVERLAY_LAYER:
+		set_layer_modulate(MOLTEN_OVERLAY_LAYER, Color(1.0, 0.4, 0.1, 0.6))
+	if get_layers_count() > SLIPPERY_OVERLAY_LAYER:
+		set_layer_modulate(SLIPPERY_OVERLAY_LAYER, Color(0.4, 0.85, 1.0, 0.6))
+	if get_layers_count() > ELECTRIFIED_OVERLAY_LAYER:
+		set_layer_modulate(ELECTRIFIED_OVERLAY_LAYER, Color(1.0, 1.0, 0.2, 0.7))
 	# Ant Queen's death reward (elana.gd's take_damage()) only halves damage
 	# from an attacker tagged "hazards" — molten damage below was passing
 	# null as the attacker, so it could never match regardless of the tile
@@ -49,8 +57,15 @@ func _process(delta: float) -> void:
 	var cell = local_to_map(local_pos)
 	var data = get_cell_tile_data(TILE_LAYER, cell)
 	var hazard = data.get_custom_data("hazard") if data else ""
-	var overlay_molten = get_cell_source_id(MOLTEN_OVERLAY_LAYER, cell) != -1
-	var overlay_slippery = get_cell_source_id(SLIPPERY_OVERLAY_LAYER, cell) != -1
+	# get_cell_source_id() hard-crashes (out-of-bounds C++ error, not a
+	# catchable exception) on a layer index that doesn't exist yet — guarded
+	# the same way the electrified layer below already was, so a TileMap
+	# that hasn't had the overlay layers added yet (e.g. a fresh test scene)
+	# fails safe instead of crashing every frame.
+	var overlay_molten = get_layers_count() > MOLTEN_OVERLAY_LAYER \
+		and get_cell_source_id(MOLTEN_OVERLAY_LAYER, cell) != -1
+	var overlay_slippery = get_layers_count() > SLIPPERY_OVERLAY_LAYER \
+		and get_cell_source_id(SLIPPERY_OVERLAY_LAYER, cell) != -1
 	# Electrified is about being IN a body of water, not standing ON a
 	# hazardous floor tile — water can be several tiles deep with solid
 	# ground at the bottom, and the instant she's standing on that ground

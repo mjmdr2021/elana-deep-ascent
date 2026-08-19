@@ -3,6 +3,8 @@
 [ext_resource type="Script" uid="uid://cllrotqflnjjl" path="res://glint.gd" id="1_w3rh4"]
 [ext_resource type="Texture2D" uid="uid://cifg0l3lvmmjl" path="res://glint.png" id="2_dwff3"]
 
+[sub_resource type="CircleShape2D" id="CircleShape2D_dwff3"]
+
 [sub_resource type="Gradient" id="Gradient_h5x4l"]
 colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0)
 
@@ -20,14 +22,18 @@ script = ExtResource("1_w3rh4")
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=1074048208]
 texture = ExtResource("2_dwff3")
 
+[node name="BodyShape" type="CollisionShape2D" parent="." unique_id=1074048209]
+shape = SubResource("CircleShape2D_dwff3")
+disabled = true
+
 [node name="Light" type="PointLight2D" parent="." unique_id=1560589701]
 texture = SubResource("GradientTexture2D_w3rh4")
 texture_scale = 2.0
 
-[node name="HerbGlow" type="PointLight2D" parent="." unique_id=2231908845]
+[node name="HerbGlow" type="PointLight2D" parent="." unique_id=-2063058451]
+energy = 0.0
 texture = SubResource("GradientTexture2D_w3rh4")
 texture_scale = 0.45
-energy = 0.0
 
-[node name="ScoutCamera" type="Camera2D" parent="." unique_id=3348217659]
+[node name="ScoutCamera" type="Camera2D" parent="." unique_id=-946749637]
 zoom = Vector2(4, 4)

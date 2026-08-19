@@ -34,6 +34,7 @@ var _warhammer_delay: float = 0.0
 @onready var _light: PointLight2D = $Light
 @onready var _herb_glow: PointLight2D = $HerbGlow
 @onready var _scout_camera: Camera2D = $ScoutCamera
+@onready var _body_shape: CollisionShape2D = $BodyShape
 var _base_light_scale: float = 1.0
 var _effects_material: ShaderMaterial = null
 # Multiplies the main light's energy/scale in _update_light() — driven down
@@ -54,7 +55,6 @@ func apply_light_dim(factor: float, duration: float) -> void:
 const SCOUT_SPEED: float = 180.0
 const SCOUT_RETURN_SPEED: float = 750.0
 const SCOUT_LEASH_RADIUS: float = preload("res://base_enemy.gd").ACTIVATION_RADIUS - 50.0
-const SCOUT_COLLISION_BUFFER: float = 6.0
 const SCOUT_ARRIVE_DIST: float = 6.0
 var _was_scouting: bool = false
 
@@ -176,20 +176,57 @@ func _process_scouting(delta: float) -> void:
 			var from_elana = intended - elana.global_position
 			if from_elana.length() > SCOUT_LEASH_RADIUS:
 				intended = elana.global_position + from_elana.normalized() * SCOUT_LEASH_RADIUS
-			global_position = _scout_move_with_collision(global_position, intended)
+			global_position = _move_with_collision(global_position, intended, elana.global_position, delta)
 	_light.energy = lerp(_light.energy, 1.3, 0.12)
 
-# Simple raycast block against terrain/solid obstacles (same layer Elana
-# collides with) — stops just short of a wall instead of clipping through it.
-func _scout_move_with_collision(from: Vector2, to: Vector2) -> Vector2:
+# Shape-based block against terrain/solid obstacles (same layer Elana
+# collides with) — checks her actual BodyShape circle (see glint.tscn,
+# bigger than her 12x12 sprite) against terrain, not just a single point/
+# line, so her real visual extent can't overlap a wall, not only her exact
+# center. Used by both scouting (above) and the normal attached-follow
+# hover (see _update_position()) — she still moves/tethers toward Elana
+# either way, she just can't overlap a wall to get there.
+const STUCK_NUDGE_SPEED: float = 60.0  # world px/sec — slow, deliberate escape
+
+# safe_pos is Elana's own current position — always guaranteed clear of
+# solid terrain, since SHE has real physics collision and can never be
+# inside a wall. Used as the recovery direction when Glint's already stuck
+# (see below). First attempt jumped 90% of the way there in one frame,
+# which looked sudden/clunky; then tried nudging toward whichever cardinal
+# direction was clear instead, which didn't work out either — back to
+# nudging toward safe_pos, but as a slow per-frame step instead of a snap.
+func _move_with_collision(from: Vector2, to: Vector2, safe_pos: Vector2, delta: float) -> Vector2:
+	var space = get_world_2d().direct_space_state
+	var shape_query := PhysicsShapeQueryParameters2D.new()
+	shape_query.shape = _body_shape.shape
+	shape_query.collision_mask = 1
+	# A shape-cast starting already overlapping terrain doesn't behave
+	# usefully for "where's the wall ahead" (standard physics-engine
+	# limitation — checks from inside a shape aren't a meaningful "am I
+	# about to hit this" query) — so if she's already stuck in a wall (very
+	# possible: her hover offset had zero wall-awareness until just now, so
+	# plenty of ordinary positions near a wall already overlap one), step
+	# toward the guaranteed-safe position at a fixed slow speed.
+	shape_query.transform = Transform2D(0.0, from)
+	if not space.intersect_shape(shape_query, 1).is_empty():
+		var to_safe: Vector2 = safe_pos - from
+		var step: float = STUCK_NUDGE_SPEED * delta
+		if to_safe.length() <= step:
+			return safe_pos
+		return from + to_safe.normalized() * step
 	if from == to:
 		return to
-	var space = get_world_2d().direct_space_state
-	var query = PhysicsRayQueryParameters2D.create(from, to, 1)
-	var result = space.intersect_ray(query)
+	shape_query.transform = Transform2D(0.0, to)
+	if space.intersect_shape(shape_query, 1).is_empty():
+		return to
+	# Destination overlaps — fall back to a ray to find roughly where the
+	# wall starts, then back off by the shape's own radius (not a flat
+	# guess) so her actual body stays clear of it, not just her center.
+	var ray_query := PhysicsRayQueryParameters2D.create(from, to, 1)
+	var result := space.intersect_ray(ray_query)
 	if result:
-		return result["position"] - (to - from).normalized() * SCOUT_COLLISION_BUFFER
-	return to
+		return result["position"] - (to - from).normalized() * _body_shape.shape.radius
+	return from
 
 # Public — cutscenes trigger a gold glow that persists until stop_story_glow()
 # is called, without fighting _update_color's per-frame overwrite. Same
@@ -226,7 +263,14 @@ func _update_position(delta: float, elana: Node, weapon: String, has_weapon: boo
 	else:
 		var hover = Vector2(0.0, sin(_hover_time * 2.5) * 4.0)
 		target = Vector2(elana.facing * 18.0, -20.0) + hover
-	position = position.lerp(target, speed * delta)
+	# Still tethered/lerping toward target exactly as before — just routed
+	# through the same wall-collision check scouting already uses, so she
+	# stops just short of a wall she'd otherwise hover into/through instead
+	# of clipping through it, without breaking the follow behavior itself.
+	var intended_local: Vector2 = position.lerp(target, speed * delta)
+	var intended_global: Vector2 = elana.to_global(intended_local)
+	var allowed_global: Vector2 = _move_with_collision(global_position, intended_global, elana.global_position, delta)
+	position = elana.to_local(allowed_global)
 
 func _update_color(has_weapon: bool, has_herb: bool) -> void:
 	if GameData.transform_delay_timer > 0.0:

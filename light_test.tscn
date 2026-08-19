@@ -1,0 +1,69 @@
+[gd_scene format=3 uid="uid://3dk12lmtrt8y"]
+
+[ext_resource type="PackedScene" uid="uid://f8neia0maecx" path="res://elana.tscn" id="1_elana"]
+[ext_resource type="TileSet" uid="uid://gwov4oq2hrit" path="res://cave_tileset.tres" id="2_tileset"]
+[ext_resource type="Script" uid="uid://dbl0gkgalj733" path="res://terrain_hazards.gd" id="3_hazards"]
+[ext_resource type="Script" uid="uid://cpufv3eag4iob" path="res://fog_of_war.gd" id="4_fog"]
+[ext_resource type="Shader" path="res://fog_overlay.gdshader" id="5_fogshader"]
+
+[sub_resource type="OccluderPolygon2D" id="OccluderPolygon2D_ltf8m"]
+polygon = PackedVector2Array(-48, 48, -48, 224, -32, 208, -32, 64, 0, 64, 0, 128, 16, 128, 16, 64, 80, 64, 80, 112, 96, 112, 96, 64, 176, 64)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_fogoverlay"]
+shader = ExtResource("5_fogshader")
+
+[node name="Node2D" type="Node2D" unique_id=1600377301]
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=2061166942]
+z_index = -1000
+offset_left = -528.0
+offset_top = -280.0
+offset_right = 1472.0
+offset_bottom = 1720.0
+pivot_offset = Vector2(904, 432)
+color = Color(0.20129037, 0.1157332, 0.0008294132, 0.8627451)
+
+[node name="Elana" parent="." unique_id=614466896 instance=ExtResource("1_elana")]
+position = Vector2(67, 155)
+
+[node name="Terrain" type="TileMap" parent="." unique_id=673754446]
+tile_set = ExtResource("2_tileset")
+format = 2
+layer_0/tile_data = PackedInt32Array(720896, 196614, 1, 720897, 720902, 5, 720898, 720902, 5, 720899, 720902, 5, 720900, 720902, 5, 720901, 720902, 5, 720902, 720902, 5, 720903, 720902, 5, 720904, 327686, 1, 786440, 983046, 5, 851976, 458758, 3, 851975, 851974, 1, 851974, 851974, 1, 851973, 851974, 1, 851972, 851974, 1, 851971, 851974, 1, 851970, 851974, 1, 851969, 851974, 1, 851968, 589830, 3, 786432, 589830, 5, 786433, 851974, 1, 786434, 851974, 1, 786435, 851974, 1, 786436, 851974, 1, 786437, 851974, 1, 786438, 851974, 1, 786439, 851974, 1, 393221, 65542, 5, 327685, 65542, 3, 262149, 65542, 3, 196613, 851974, 5, 196615, 851974, 5, 196614, 851974, 5, 196612, 851974, 5, 196611, 851974, 5, 196610, 851974, 5, 196609, 851974, 5, 196608, 851974, 5, 262144, 65542, 3, 327680, 65542, 3, 393216, 65542, 3, 458752, 65542, 5, 262143, 851974, 5, 262142, 851974, 5, 262141, 458758, 1, 327677, 983046, 5, 393213, 720902, 5, 917501, 720902, 5, 917502, 720902, 5, 917503, 720902, 5, 851977, 720902, 5, 851978, 720902, 5, 851979, 589830, 3, 458763, 589830, 5, 393227, 589830, 5, 327691, 589830, 5, 262155, 589830, 5, 196619, 589830, 1, 196618, 851974, 5, 196617, 851974, 5, 196616, 851974, 5, 524296, 851974, 3, 393219, 851974, 3, 851980, 720902, 5, 851981, 720902, 5, 851982, 720902, 5, 851983, 720902, 5, 851984, 720902, 5, 851985, 720902, 5, 851986, 720902, 5, 851987, 720902, 5, 851988, 720902, 5, 851989, 720902, 5, 851990, 720902, 5, 851991, 720902, 5, 851992, 720902, 5, 851993, 720902, 5, 851994, 720902, 5, 851995, 720902, 5, 851996, 720902, 5, 851997, 720902, 5, 851998, 720902, 5, 851999, 720902, 5, 852000, 720902, 5, 852001, 720902, 5, 852002, 720902, 5, 852003, 720902, 5, 786467, 720902, 5, 720931, 720902, 5, 655395, 720902, 5, 589859, 720902, 5, 524323, 720902, 5, 458787, 720902, 5, 393251, 720902, 5, 327715, 720902, 5, 327714, 720902, 5, 262178, 720902, 5, 262177, 720902, 5, 196641, 720902, 5, 196640, 720902, 5, 196639, 720902, 5, 131103, 720902, 5, 131102, 720902, 5, 131101, 720902, 5, 131100, 720902, 5, 131099, 720902, 5, 196635, 720902, 5, 196634, 720902, 5, 262170, 720902, 5, 327705, 720902, 5, 393241, 720902, 5, 458777, 720902, 5, 524313, 720902, 5, 589849, 720902, 5, 589848, 720902, 5, 589847, 720902, 5, 589846, 720902, 5, 589845, 720902, 5, 589844, 720902, 5, 655380, 720902, 5, 655379, 720902, 5, 655378, 720902, 5, 655377, 720902, 5, 655376, 720902, 5, 589840, 720902, 5, 589839, 720902, 5, 589838, 720902, 5, 589837, 720902, 5, 589836, 720902, 5, 524300, 720902, 5, 524299, 720902, 5, 393212, 720902, 5, 393211, 720902, 5, 393210, 720902, 5, 393209, 720902, 5, 327673, 720902, 5, 327672, 720902, 5, 327671, 720902, 5, 327670, 720902, 5, 327669, 720902, 5, 327668, 720902, 5, 327667, 720902, 5, 327666, 720902, 5, 393202, 720902, 5, 393201, 720902, 5, 393200, 720902, 5, 458736, 720902, 5, 458735, 720902, 5, 524271, 720902, 5, 524270, 720902, 5, 589806, 720902, 5, 655342, 720902, 5, 720878, 720902, 5, 786414, 720902, 5, 851951, 720902, 5, 851952, 720902, 5, 917488, 720902, 5, 917489, 720902, 5, 917490, 720902, 5, 983027, 720902, 5, 983028, 720902, 5, 983029, 720902, 5, 983030, 720902, 5, 983031, 720902, 5, 983032, 720902, 5, 983033, 720902, 5, 983034, 720902, 5, 917498, 720902, 5, 917499, 720902, 5, 917500, 720902, 5)
+script = ExtResource("3_hazards")
+
+[node name="LightOccluder2D" type="LightOccluder2D" parent="Terrain" unique_id=1150971249]
+visible = false
+occluder = SubResource("OccluderPolygon2D_ltf8m")
+
+[node name="FogOfWar" type="Node2D" parent="." unique_id=1915181650]
+script = ExtResource("4_fog")
+
+[node name="FogOverlay" type="CanvasLayer" parent="FogOfWar"]
+layer = 1
+
+[node name="ColorRect" type="ColorRect" parent="FogOfWar/FogOverlay"]
+material = SubResource("ShaderMaterial_fogoverlay")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="BootCover" type="CanvasLayer" parent="FogOfWar"]
+layer = 100
+
+[node name="ColorRect" type="ColorRect" parent="FogOfWar/BootCover"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 1)
+
+[node name="CanvasModulate" type="CanvasModulate" parent="." unique_id=1420091340]
+color = Color(0.12, 0.12, 0.12, 1)
+
+[node name="SpawnDefault" type="Marker2D" parent="." unique_id=1685276961]
+position = Vector2(67, 155)
