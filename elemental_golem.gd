@@ -54,10 +54,9 @@ const TINT_WINTER_SLUMBER: Color = Color(0.5, 0.8, 1.0, 1.0)
 
 # Fixed rotation, not a random pool — see this file's header comment.
 # 1=Ground Slam, 2=Shock Coat, 3=Overheat, 4=Winter Slumber.
-# TEMPORARY — forced to Ground Slam only for testing, per user request
-# (2026-08-20), "I want to see it more clearly". Real sequence:
-# [1, 2, 3, 4, 3, 2] — restore that once testing's done.
-const ATTACK_SEQUENCE: Array[int] = [1]
+# Fixed rotation, not a random pool — see this file's header comment.
+# 1=Ground Slam, 2=Shock Coat, 3=Overheat, 4=Winter Slumber.
+const ATTACK_SEQUENCE: Array[int] = [1, 2, 3, 4, 3, 2]
 # Gap between one special finishing and the next becoming eligible to
 # start — keeps her from chaining them with zero breathing room.
 const SPECIAL_COOLDOWN_GAP: float = 1.5
