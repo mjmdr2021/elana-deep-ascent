@@ -647,6 +647,8 @@ func _setup_toggles():
 		Vector2(10, 850), _on_ant_queen_buff_toggled)
 	canvas.add_child(ant_queen_buff_button)
 
+	canvas.add_child(_make_toggle_button("Reset to Lvl 1 (Dev)", Vector2(10, 890), _on_reset_to_level_1))
+
 func _on_give_respecs():
 	GameData.add_item("respecElana")
 	GameData.add_item("respecGlint")
@@ -654,6 +656,14 @@ func _on_give_respecs():
 
 func _on_max_all_skills():
 	GameData.dev_max_all_skills()
+	_refresh_skill_tree()
+	_refresh_glint_skill_tree()
+
+# Inverse of _on_max_all_skills()/_on_max_level() — back to level 1 with
+# every skill point unspent. Same UI refresh calls as _on_max_all_skills()
+# since the skill trees' button states need to reflect the now-zeroed levels.
+func _on_reset_to_level_1():
+	GameData.dev_reset_to_level_1()
 	_refresh_skill_tree()
 	_refresh_glint_skill_tree()
 
@@ -1462,6 +1472,7 @@ func _setup_skill_tree():
 		"attack_speed_node":  [565, 175],
 		"flash_stun_skill":   [710, 175],
 		"luminosity_plus":    [565, 250],
+		"scouting_distance":  [710, 250],
 		"phantom_blur":       [420, 250],
 		"double_jump_skill":  [565, 325],
 		"dodge_roll_skill":   [420, 325],
@@ -1506,6 +1517,7 @@ func _setup_skill_tree():
 		["agility","wall_jump_skill"], ["agility","agility_herb_speed"],
 		["agility_herb_speed","attack_speed_node"], ["attack_speed_node","flash_stun_skill"],
 		["agility_herb_speed","luminosity_plus"], ["agility_herb_speed","phantom_blur"],
+		["luminosity_plus","scouting_distance"],
 		["phantom_blur","double_jump_skill"], ["phantom_blur","dodge_roll_skill"],
 		# Elemental
 		["elemental_potency","casting_speed"], ["elemental_potency","ice_potency"],

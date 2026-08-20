@@ -110,7 +110,8 @@ const SKILL_TREE_DATA: Dictionary = {
 	"agility_herb_speed":        { "name": "Agility Herb+",       "type": "stat",    "path": 2, "max_level": 3, "prereq": "agility",          "desc": "+10% move speed (Agility Herb)" },
 	"attack_speed_node":  { "name": "Attack Speed",       "type": "stat",    "path": 2, "max_level": 3, "prereq": "agility_herb_speed",      "desc": "+10% atk speed (Agility Herb)" },
 	"flash_stun_skill":   { "name": "★ Flash Stun",      "type": "skill",   "path": 2, "max_level": 1, "prereq": "attack_speed_node","desc": "Stun all enemies 3s (Agility Herb)" },
-	"luminosity_plus":    { "name": "Luminosity+",        "type": "passive",  "path": 2, "max_level": 3, "prereq": "agility_herb_speed",      "desc": "+1 glow radius tier/lvl" },
+	"luminosity_plus":    { "name": "Luminosity+",        "type": "passive",  "path": 2, "max_level": 3, "prereq": "agility_herb_speed",      "desc": "+1 glow radius tier/lvl; +fog reveal size while scouting/lvl" },
+	"scouting_distance":  { "name": "Scouting Distance",  "type": "stat",    "path": 2, "max_level": 3, "prereq": "luminosity_plus",  "desc": "+140 scout leash distance/lvl" },
 	"phantom_blur":       { "name": "Phantom Blur",       "type": "stat",    "path": 2, "max_level": 3, "prereq": "agility_herb_speed",      "desc": "+8% dodge chance/lvl" },
 	"double_jump_skill":  { "name": "★ Double Jump",     "type": "skill",   "path": 2, "max_level": 1, "prereq": "phantom_blur",     "desc": "Unlock double jump" },
 	"dodge_roll_skill":   { "name": "★ Dodge Roll",      "type": "skill",   "path": 2, "max_level": 1, "prereq": "phantom_blur",     "desc": "Unlock dodge roll" },
@@ -265,6 +266,13 @@ var herb_duration_bonus: float = 0.0
 var attack_speed_node_bonus: int = 0
 var agility_herb_speed_bonus: float = 0.0
 var glint_luminosity_bonus: float = 0.0
+# Scouting Distance (child of Luminosity+) — added to glint.gd's scout
+# leash radius, world px/lvl.
+var scout_leash_radius_bonus: float = 0.0
+# Luminosity+ itself also grows fog_of_war.gd's erase radius specifically
+# while Glint is scouting (see fog_of_war.gd's _physics_process()) — world
+# px/lvl, on top of its own existing glow-radius/brightness effect.
+var scout_fog_erase_bonus: float = 0.0
 var power_potency_bonus: float = 0.0
 var last_stand_heal_pct: float = 0.0
 var last_stand_cd: float = 0.0
@@ -305,6 +313,13 @@ const HOLLOWSCALE_RECHARGE: float = 10.0
 # Blessing track, just a permanent flag set on her on_death().
 var ant_queen_defeated = false
 const HAZARD_DAMAGE_REDUCTION: float = 0.5
+# Elemental Golem mini-boss reward — permanent +10% resist to every element,
+# folded into get_elemental_resist_for() below. A separate additive field
+# instead of writing directly into elemental_resist (the elem_resist skill
+# node's own stat, already clamped 0.0-0.30 by _apply_skill_node_effect())
+# so this can't collide with or get overwritten by that clamp.
+var elemental_golem_defeated: bool = false
+const ELEMENTAL_GOLEM_RESIST_BONUS: float = 0.10
 # Single source of truth for how long Elana's "shocked" status (elana.gd's
 # apply_shock() — input blocked, momentum NOT zeroed, unlike stun/freeze)
 # lasts, shared by every electric source instead of each keeping its own
@@ -524,6 +539,9 @@ func _apply_skill_node_effect(node_id: String) -> void:
 			agility_herb_speed_bonus += 10.0
 		"luminosity_plus":
 			glint_luminosity_bonus += 0.4
+			scout_fog_erase_bonus += 15.0
+		"scouting_distance":
+			scout_leash_radius_bonus += 140.0
 		"shockwave":
 			match get_skill_level("shockwave"):
 				1: shockwave_pct = 0.35
@@ -650,6 +668,8 @@ func _reset_elana_skill_stats() -> void:
 	attack_speed_node_bonus = 0
 	agility_herb_speed_bonus = 0.0
 	glint_luminosity_bonus = 0.0
+	scout_leash_radius_bonus = 0.0
+	scout_fog_erase_bonus = 0.0
 	shockwave_pct = 0.0
 	last_stand_heal_pct = 0.0
 	iron_body_pct = 0.0
@@ -769,6 +789,26 @@ func dev_set_max_level() -> void:
 	xp = 0
 	hp = max_hp
 
+# Dev cheat — the inverse of dev_set_max_level()/dev_max_all_skills():
+# back to level 1, xp/sp/glint_sp zeroed, every skill point unspent and
+# every skill-derived stat cleared. Same skill_tree_levels/glint_skill_
+# tree_levels/_reset_*_skill_stats() pattern reset() and apply_respec()
+# already use — deliberately narrower than reset() itself, though: this
+# only touches level/xp/hp/skills, not inventory/unlocks/room_state/save
+# data, so it's a level-and-skills-only rollback, not a fresh new game.
+func dev_reset_to_level_1() -> void:
+	level = 1
+	xp = 0
+	max_hp = 100
+	hp = 100
+	sp = 0
+	glint_sp = 0
+	skill_tree_levels.clear()
+	skill_tree_levels["air_dash_node"] = 1  # always owned, not spent from SP
+	glint_skill_tree_levels.clear()
+	_reset_elana_skill_stats()
+	_reset_glint_skill_stats()
+
 func get_attack_damage() -> int:
 	return 10 + (level - 1)
 
@@ -779,7 +819,7 @@ func get_defense() -> int:
 	return defense + (HOLLOWSCALE_ARMOR_BONUS if hollowscale_unlocked else 0)
 
 func get_elemental_resist_for(element: String) -> float:
-	var resist = elemental_resist
+	var resist = elemental_resist + (ELEMENTAL_GOLEM_RESIST_BONUS if elemental_golem_defeated else 0.0)
 	if active_herb != null:
 		match element:
 			"fire":
@@ -987,6 +1027,7 @@ func reset() -> void:
 	elemander_pads_unlocked = false
 	golden_cloak_unlocked = false
 	ant_queen_defeated = false
+	elemental_golem_defeated = false
 	hollowscale_unlocked = false
 	hollowscale_cooldown = 0.0
 	danger_sense_unlocked = false
@@ -1029,6 +1070,7 @@ func save_game() -> void:
 		"golden_cloak_unlocked": golden_cloak_unlocked,
 		"hollowscale_unlocked": hollowscale_unlocked,
 		"ant_queen_defeated": ant_queen_defeated,
+		"elemental_golem_defeated": elemental_golem_defeated,
 		"danger_sense_unlocked": danger_sense_unlocked,
 		"spawn_point_id": spawn_point_id, "respawn_scene": respawn_scene,
 		"respawn_position": [respawn_position.x, respawn_position.y],
@@ -1081,6 +1123,7 @@ func load_game() -> bool:
 	golden_cloak_unlocked = parsed.get("golden_cloak_unlocked", golden_cloak_unlocked)
 	hollowscale_unlocked = parsed.get("hollowscale_unlocked", hollowscale_unlocked)
 	ant_queen_defeated = parsed.get("ant_queen_defeated", ant_queen_defeated)
+	elemental_golem_defeated = parsed.get("elemental_golem_defeated", elemental_golem_defeated)
 	danger_sense_unlocked = parsed.get("danger_sense_unlocked", danger_sense_unlocked)
 	spawn_point_id = parsed.get("spawn_point_id", spawn_point_id)
 	respawn_scene = parsed.get("respawn_scene", respawn_scene)

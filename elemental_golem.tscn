@@ -1,0 +1,149 @@
+[gd_scene format=3 uid="uid://dien3qs53ukcl"]
+
+[ext_resource type="Script" uid="uid://7s1frfgskft2" path="res://elemental_golem.gd" id="1_golem"]
+[ext_resource type="Script" uid="uid://bmjyqjn82muoe" path="res://hit_handler.gd" id="2_hithandler"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
+size = Vector2(48, 72)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hurt"]
+size = Vector2(52, 76)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_aggro"]
+size = Vector2(400, 200)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_attack"]
+size = Vector2(40, 40)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_overheat"]
+radius = 150.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_slumber"]
+radius = 150.0
+
+[sub_resource type="Gradient" id="Gradient_overheatblast"]
+offsets = PackedFloat32Array(0, 0.3, 0.7, 1)
+colors = PackedColorArray(1, 0.95, 0.7, 0.9, 1, 0.6, 0.2, 0.8, 1, 0.3, 0.1, 0.5, 1, 0.2, 0.05, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_overheatblast"]
+gradient = SubResource("Gradient_overheatblast")
+width = 300
+height = 300
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="Gradient_slumberglow"]
+offsets = PackedFloat32Array(0, 0.85, 1)
+colors = PackedColorArray(0.5, 0.8, 1, 0.3, 0.5, 0.8, 1, 0.4, 0.5, 0.8, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_slumberglow"]
+gradient = SubResource("Gradient_slumberglow")
+width = 300
+height = 300
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[node name="ElementalGolem" type="CharacterBody2D" unique_id=2033045489]
+collision_layer = 2
+script = ExtResource("1_golem")
+enemy_type = 1
+speed = 15.0
+chase_speed = 25.0
+max_hp = 1000
+xp_reward = 180
+defense = 60
+attack_damage = 22
+attack_speed_mult = 0.5
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1174003638]
+shape = SubResource("RectangleShape2D_body")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=1311059021]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -24.0
+offset_top = -36.0
+offset_right = 24.0
+offset_bottom = 36.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.4, 0.38, 0.35, 1)
+
+[node name="Hurtbox" type="Area2D" parent="." unique_id=1437352013]
+collision_layer = 4
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox" unique_id=355260600]
+shape = SubResource("RectangleShape2D_hurt")
+
+[node name="AggroZone" type="Area2D" parent="." unique_id=699357276]
+position = Vector2(150, 0)
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="AggroZone" unique_id=2037799492]
+shape = SubResource("RectangleShape2D_aggro")
+
+[node name="AttackZone" type="Area2D" parent="." unique_id=821094130]
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="AttackZone" unique_id=37448283]
+shape = SubResource("RectangleShape2D_attack")
+
+[node name="WallCheck" type="RayCast2D" parent="." unique_id=226340133]
+
+[node name="HPBar" type="Node2D" parent="." unique_id=1604096204]
+position = Vector2(-30, -48)
+
+[node name="Background" type="ColorRect" parent="HPBar" unique_id=1811078538]
+offset_right = 60.0
+offset_bottom = 8.0
+color = Color(0.18862307, 0.19213569, 0.18689519, 1)
+
+[node name="Fill" type="ColorRect" parent="HPBar" unique_id=896809883]
+offset_right = 60.0
+offset_bottom = 8.0
+color = Color(0.6, 0.3, 0.7, 1)
+
+[node name="ShockCoatIcon" type="ColorRect" parent="HPBar"]
+visible = false
+offset_left = 66.0
+offset_top = -1.0
+offset_right = 74.0
+offset_bottom = 7.0
+color = Color(1.0, 0.95, 0.3, 1)
+
+[node name="HitHandler" type="Node" parent="." unique_id=994394284]
+script = ExtResource("2_hithandler")
+
+[node name="OverheatExplosionFlash" type="Sprite2D" parent="." unique_id=3894217603]
+visible = false
+z_index = -1
+texture = SubResource("GradientTexture2D_overheatblast")
+
+[node name="SlumberGlow" type="Sprite2D" parent="." unique_id=3894217604]
+visible = false
+z_index = -1
+texture = SubResource("GradientTexture2D_slumberglow")
+
+[node name="OverheatBlastZone" type="Area2D" parent="." unique_id=1981932869]
+collision_layer = 0
+collision_mask = 2
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="OverheatBlastZone" unique_id=707058393]
+shape = SubResource("CircleShape2D_overheat")
+
+[node name="SlumberAura" type="Area2D" parent="." unique_id=1292715059]
+collision_layer = 0
+collision_mask = 2
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="SlumberAura" unique_id=1105267312]
+shape = SubResource("CircleShape2D_slumber")

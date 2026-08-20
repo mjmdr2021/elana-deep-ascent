@@ -18,7 +18,17 @@ uniform vec4 glow_outline_color : source_color = vec4(1.0, 0.85, 0.3, 1.0);
 uniform float glow_outline_alpha : hint_range(0.0, 1.0) = 0.0;
 
 void fragment() {
-	vec4 col = texture(TEXTURE, UV);
+	// COLOR, not a fresh texture(TEXTURE, UV) sample — Godot pre-populates
+	// COLOR with texture(TEXTURE, UV) * modulate before fragment() runs, so
+	// starting from a raw re-sample here discarded every _sprite.modulate
+	// assignment anywhere in elana.gd (frozen/slowed tints, the burn/poison
+	// tick flash, and now shocked/burnt) — none of it was ever visible,
+	// confirmed by testing: NO tint showed at all, not even old ones
+	// unrelated to today's changes. Starting from COLOR instead preserves
+	// that multiply while keeping every effect below working exactly as
+	// before (all their tint colors use alpha 1.0, so the alpha-threshold
+	// outline check below behaves identically either way).
+	vec4 col = COLOR;
 
 	if (col.a < 0.5 && (enabled || glow_outline_alpha > 0.0)) {
 		vec2 size = TEXTURE_PIXEL_SIZE * outline_width;

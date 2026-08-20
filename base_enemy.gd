@@ -43,6 +43,19 @@ const JUMP_VELOCITY = -280.0
 @export var attack_damage: int = 10
 @export var attack_cooldown_time: float = 1.0
 @export var attack_windup_time: float = 0.25
+# 1.0 = normal pace, <1.0 = slower attacks (cooldown stretches), >1.0 =
+# faster (cooldown shrinks) — same "higher number is stronger/faster"
+# convention as Elana's own attack_speed_stat, unlike attack_cooldown_time
+# itself where a bigger number means slower. get_effective_attack_cooldown()
+# below is what actually applies it; every place that used to hard-code
+# "attack_cooldown = attack_cooldown_time" (this file, lava_golem.gd,
+# elemental_golem.gd) now goes through that instead, so a single per-enemy
+# stat controls pace everywhere instead of only wherever someone remembers
+# to read attack_cooldown_time directly.
+@export var attack_speed_mult: float = 1.0
+
+func get_effective_attack_cooldown() -> float:
+	return attack_cooldown_time / max(0.01, attack_speed_mult)
 var elana_in_attack_zone: bool = false
 var attack_windup_timer: float = 0.0
 var attack_anim_timer: float = 0.0  # generic "show attack anim" window — ranged enemies set this on fire
@@ -236,7 +249,7 @@ func _perform_attack() -> void:
 		$WallCheck.force_raycast_update()
 		if not $WallCheck.is_colliding():
 			elana.take_damage(attack_damage, false, self)
-	attack_cooldown = attack_cooldown_time
+	attack_cooldown = get_effective_attack_cooldown()
 
 func _move(_delta: float) -> void:
 	pass

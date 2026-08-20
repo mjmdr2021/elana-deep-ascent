@@ -33,8 +33,13 @@ extends "res://enemy.gd"
 @export var egg_vicinity_radius: float = 250.0
 @export var egg_hatch_time: float = 10.0
 # Hatch timer only ticks while Elana is this close to the QUEEN (not the
-# egg) — copied onto every egg she lays, same as egg_hatch_time.
-@export var egg_hatch_vicinity_radius: float = 30.0
+# egg) — copied onto every egg she lays, same as egg_hatch_time. 30 was too
+# tight to ever actually trigger: her own collision body is 128x64 (64px
+# half-width), so standing right at her edge already put Elana ~64px from
+# her origin — well outside a 30px radius, meaning eggs effectively never
+# hatched even standing right next to her (confirmed by testing). 120
+# comfortably covers standing adjacent to her from any side.
+@export var egg_hatch_vicinity_radius: float = 120.0
 @export var max_eggs: int = 10
 # Random X range (either side of her) eggs can land within along the ground
 # — a fresh roll each time, not a fixed spot every egg.
@@ -72,6 +77,16 @@ func _tick_timers(delta: float) -> void:
 	super._tick_timers(delta)
 
 func _physics_process(delta: float) -> void:
+	# Immune to knockback/knock-up — every source (weapon hits, Chain Claw's
+	# pull, boss-style attacks) writes to this same base_enemy.gd field,
+	# consumed once per frame in super._physics_process() below (velocity =
+	# _pending_knockback, plus a stun that rides along with it). Clearing it
+	# here, before the base class ever sees it, blocks all of them uniformly
+	# without needing to special-case each attack's own knockback call site.
+	# She's stationary by design (see this file's header comment) — a boss
+	# that can't be moved shouldn't be knocked around, or stun-locked by the
+	# hit-stun that normally accompanies a heavy knockback.
+	_pending_knockback = Vector2.ZERO
 	super._physics_process(delta)
 	_tick_eggs(delta)
 	_tick_harden(delta)

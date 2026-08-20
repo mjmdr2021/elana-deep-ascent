@@ -669,6 +669,15 @@ func _update_status_tint() -> void:
 		color = Color(1.4, 1.2, 0.5)
 	elif is_frozen:
 		color = Color(0.4, 0.75, 1.0)
+	# Shocked/burnt now tint too — previously had zero visual feedback at
+	# all, unlike frozen/slow. Ordered above slow (control-affecting
+	# statuses read as more urgent than a movement debuff) and burnt above
+	# slow too (an active DoT is more urgent than a movement debuff), same
+	# elif-chain "first match wins" pattern already established here.
+	elif is_shocked:
+		color = Color(1.0, 0.95, 0.3)
+	elif burn_ticks_remaining > 0:
+		color = Color(1.0, 0.55, 0.25)
 	elif slow_timer > 0.0:
 		color = Color(0.75, 0.88, 1.0)
 	elif GameData.passive_shield_hp > 0.0:
@@ -1418,9 +1427,19 @@ func _handle_attack_input(delta: float) -> void:
 	var transforming = GameData.transform_delay_timer > 0.0
 	if is_stunned or is_blocking:
 		return
+	# Wall-jumping (the same commitment window _update_facing_from_mouse()
+	# already locks facing during) locks out attacking entirely, except
+	# she can still charge into Chain Claw's heavy attack (the hook) —
+	# light attacks of any weapon, and heavy attacks of every OTHER
+	# weapon, stay blocked for the whole window.
+	if _wall_jump_input_locked and GameData.current_weapon != "chain_claw":
+		return
 	# In water: no plunge (falls through to a normal light attack instead)
-	# and no charging into a heavy attack — light attacks only.
-	if Input.is_action_just_pressed("attack") and not is_attacking and not is_plunge_attacking and not is_charging and not transforming:
+	# and no charging into a heavy attack — light attacks only. Also no
+	# light attack at all while wall-jump-locked (see above) — even with
+	# chain_claw exempted from the early return, only charging through to
+	# the heavy release is allowed during that window, not a light tap.
+	if not _wall_jump_input_locked and Input.is_action_just_pressed("attack") and not is_attacking and not is_plunge_attacking and not is_charging and not transforming:
 		if not is_on_floor() and not _in_water and Input.is_action_pressed("move_down"):
 			_start_plunge()
 		else:
@@ -1554,10 +1573,22 @@ func _start_herb_cast_lock() -> void:
 	_casting_herb_skill = true
 	_cast_lock_timer = HERB_CAST_LOCK_DURATION
 
+# Flat penalty applied whenever slow_factor < 1.0 (ANY active slow source —
+# Ice Wisp, Slow Node, Pollen Puffer, Frost Beam, Elemental Golem's Winter
+# Slumber, etc.), not scaled to how strong that particular slow is. One
+# consistent rule for every slow in the game, applied in the single place
+# every attack path (light/heavy, every weapon) already funnels through for
+# its cooldown, instead of each slow source needing its own attack-speed
+# handling.
+const SLOWED_ATTACK_SPEED_PENALTY: float = 1.25  # -25% attack speed
+
 func get_attack_cooldown() -> float:
 	var as_clamped = clamp(float(GameData.attack_speed_stat + GameData.weapon_attack_speed + GameData.attack_speed_herb_bonus), 0.0, 100.0)
 	var reduction = ATTACK_SPEED_R_MAX * pow(as_clamped / 100.0, ATTACK_SPEED_P)
-	return max(0.01, GameData.weapon_base_cooldown - reduction)
+	var cooldown = max(0.01, GameData.weapon_base_cooldown - reduction)
+	if slow_factor < 1.0:
+		cooldown *= SLOWED_ATTACK_SPEED_PENALTY
+	return cooldown
 
 func _spawn_shockwave() -> void:
 	var sw = preload("res://shockwave.gd").new()
@@ -1741,7 +1772,14 @@ func _input(event) -> void:
 		if is_charging:
 			is_charging = false
 			charge_timer = 0.0
-			if GameData.transform_delay_timer <= 0.0:
+			# Covers a narrow edge case _handle_attack_input()'s own guard
+			# can't: charging a non-chain_claw weapon, THEN wall-jumping
+			# mid-charge — is_charging was already true before the lock
+			# started, so releasing here would otherwise still fire that
+			# weapon's heavy attack during a window that's supposed to
+			# lock out everything except Chain Claw's hook.
+			var wall_jump_blocks_release: bool = _wall_jump_input_locked and GameData.current_weapon != "chain_claw"
+			if GameData.transform_delay_timer <= 0.0 and not wall_jump_blocks_release:
 				heavy_attack()
 		else:
 			charge_timer = 0.0

@@ -50,12 +50,21 @@ func apply_light_dim(factor: float, duration: float) -> void:
 	_dim_timer = max(_dim_timer, duration)
 
 # Independent scouting — she detaches, roams under WASD with simple wall
-# collision, and beelines back through everything once recalled. Leash is
-# 50px tighter than the enemy proximity-activation radius they already share.
+# collision, and beelines back through everything once recalled.
 const SCOUT_SPEED: float = 180.0
 const SCOUT_RETURN_SPEED: float = 750.0
-const SCOUT_LEASH_RADIUS: float = preload("res://base_enemy.gd").ACTIVATION_RADIUS - 50.0
+# Shrunk from the enemy proximity-activation radius minus 50 (650) to make
+# investing in the Scouting Distance skill actually matter — the per-level
+# bonus grew to match, so a fully-leveled max (770) is unchanged from
+# before, only the un-upgraded starting point is shorter now.
+const SCOUT_LEASH_RADIUS_BASE: float = 350.0
 const SCOUT_ARRIVE_DIST: float = 6.0
+
+# Base leash + Scouting Distance skill's per-level bonus (GameData.gd,
+# child of Luminosity+) — a function, not a const, since the bonus changes
+# at runtime as skill points get spent.
+func _scout_leash_radius() -> float:
+	return SCOUT_LEASH_RADIUS_BASE + GameData.scout_leash_radius_bonus
 var _was_scouting: bool = false
 
 func _ready() -> void:
@@ -183,14 +192,20 @@ func _process_scouting(delta: float) -> void:
 			move_dir = move_dir.normalized()
 			var intended = global_position + move_dir * SCOUT_SPEED * delta
 			var from_elana = intended - elana.global_position
-			if from_elana.length() > SCOUT_LEASH_RADIUS:
-				intended = elana.global_position + from_elana.normalized() * SCOUT_LEASH_RADIUS
+			var leash_radius: float = _scout_leash_radius()
+			if from_elana.length() > leash_radius:
+				intended = elana.global_position + from_elana.normalized() * leash_radius
 			global_position = _move_with_collision(global_position, intended, elana.global_position, delta, true)
-	_light.energy = lerp(_light.energy, 1.3, 0.12)
+	# Same glow logic attached mode uses (luminosity/herb-integration bonus
+	# affecting both brightness and reach) instead of a separate hardcoded
+	# energy target — scouting used to skip all of that entirely. Weapon is
+	# always effectively "fist" while scouting (same convention elana.gd's
+	# own visual_weapon uses), so has_weapon is always false here.
+	_update_light(false, GameData.active_herb != null)
 
 # Shape-based block against terrain/solid obstacles (same layer Elana
-# collides with) — checks her actual BodyShape (see glint.tscn, a small
-# 8x8 square) against terrain rather than a single point/line. Deliberately
+# collides with) — checks her actual BodyShape (see glint.tscn, an 8px-
+# radius circle) against terrain rather than a single point/line. Kept
 # smaller than her 12x12 sprite, not bigger — an earlier bigger-than-sprite
 # shape (a 16px circle) made her read as "stuck" against geometry her
 # sprite visually only barely grazed, since the shape itself was catching
@@ -410,6 +425,17 @@ func _update_color(has_weapon: bool, has_herb: bool) -> void:
 	_sprite.modulate = col
 
 func _update_light(has_weapon: bool, has_herb: bool) -> void:
+	# Luminosity+ (Elana tree, +25%/lvl) and Herb Integration (Glint tree,
+	# flat +30% while a herb is active) add together, not multiply — maxed
+	# Luminosity+ (75%) plus Herb Integration is +105% total, not +127.5%.
+	# Computed before target_energy now (moved up) so it can boost brightness
+	# too, not just reach — previously only fed into target_scale, so a
+	# "brighter light" skill only ever made her glow bigger, never actually
+	# brighter.
+	var glow_bonus: float = GameData.glint_luminosity_bonus
+	if has_herb and GameData.get_glint_skill_level("g_herb_integration") >= 1:
+		glow_bonus += 0.3
+
 	var target_energy: float
 	if _swing_flash_timer > 0.0 or _kill_flash_timer > 0.0:
 		target_energy = 1.8
@@ -418,6 +444,7 @@ func _update_light(has_weapon: bool, has_herb: bool) -> void:
 		target_energy = lerp(0.7, 1.3, ratio)
 	else:
 		target_energy = 1.0
+	target_energy *= (1.0 + glow_bonus)
 
 	# _dim_factor (default 1.0, driven down by apply_light_dim — see below)
 	# multiplies both energy and scale, so a dim reads as the light genuinely
@@ -427,12 +454,6 @@ func _update_light(has_weapon: bool, has_herb: bool) -> void:
 	# tinting it to the herb color would wash the whole visible area instead
 	# of just Glint. The herb tint lives on the small HerbGlow light instead.
 	_light.color = _light.color.lerp(Color.WHITE, 0.15)
-	# Luminosity+ (Elana tree, +25%/lvl) and Herb Integration (Glint tree,
-	# flat +30% while a herb is active) add together, not multiply — maxed
-	# Luminosity+ (75%) plus Herb Integration is +105% total, not +127.5%.
-	var glow_bonus: float = GameData.glint_luminosity_bonus
-	if has_herb and GameData.get_glint_skill_level("g_herb_integration") >= 1:
-		glow_bonus += 0.3
 	var target_scale: float = _base_light_scale * (1.0 + glow_bonus) * _dim_factor
 	_light.texture_scale = lerp(_light.texture_scale, target_scale, 0.1)
 

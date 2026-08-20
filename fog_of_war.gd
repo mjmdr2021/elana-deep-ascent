@@ -74,8 +74,11 @@ extends Node2D
 # physics frame instead of only every repaint_distance means consecutive
 # stamps overlap heavily regardless of radius (a frame of movement is only
 # a few px), so a tighter radius reads as a closer-fitting trail instead of
-# one big blurry blob, without leaving gaps.
-@export var brush_radius: float = 72.0  # world px, soft-edged
+# one big blurry blob, without leaving gaps. Shrunk from 72 (2026-08-20)
+# now that debug_disable_wall_check defaults to true — with the wall check
+# off, nothing naturally stops the brush from reaching into an adjacent
+# room, so the radius itself needed to shrink to compensate.
+@export var brush_radius: float = 56.0  # world px, soft-edged
 # Save-to-GameData throttle only (see _erase_at()) — the visual erase now
 # runs every physics frame for smoothness, but re-encoding the whole mask
 # to PNG + base64 and writing it to GameData is real, avoidable cost if
@@ -97,6 +100,18 @@ extends Node2D
 # normal fog sampling, instead of a hard-edged circle. Must stay > 0 (the
 # shader's smoothstep needs distinct start/end values).
 @export var elana_reveal_softness: float = 20.0
+# Skips the wall-aware visibility check, letting the erase brush bleed
+# through walls as a pure, uniform circle instead of following the tile
+# grid near obstacles. Started as a debug toggle to compare against a clean
+# baseline — confirmed (2026-08-20) the tile-grid wall check was exactly
+# what caused the erase trail's edge to look blocky/staircase-shaped near
+# anything solid, and the smooth-circle look was preferred over strict
+# per-tile wall accuracy, so this is now the real default, not a temporary
+# test. Trade-off, explicit: standing near a wall can now erase a sliver of
+# the room on the other side of it too, since nothing stops the circle at
+# the wall anymore — brush_radius was shrunk (56, was 72) specifically to
+# keep that bleed-through small.
+@export var debug_disable_wall_check: bool = true
 
 var _full_image: Image
 var _window_image: Image
@@ -143,6 +158,10 @@ func _ready() -> void:
 	# Opaque black everywhere — fully hides the world until erased.
 	_full_image.fill(Color(0.0, 0.0, 0.0, 1.0))
 	_load_saved_mask()
+	# After the saved mask loads, not before — this is a permanent design
+	# exemption ("this area is just never fogged"), not tied to
+	# exploration history, so it has to win over even an old/stale save.
+	_reveal_permanent_zones()
 
 	_window_image = Image.create(window_size.x, window_size.y, false, Image.FORMAT_LA8)
 	_window_texture = ImageTexture.create_from_image(_window_image)
@@ -189,7 +208,14 @@ func _physics_process(delta: float) -> void:
 	# not to either character's position directly.
 	var glint := elana.get_node_or_null("Glint")
 	if glint != null:
-		_erase_at(glint.global_position)
+		# Scouting gets a bigger erase radius than normal, scaled by the
+		# Luminosity+ skill's level (GameData.scout_fog_erase_bonus) —
+		# doesn't touch Elana's own erase or Glint's normal attached-mode
+		# radius, both still use the plain brush_radius above.
+		var glint_radius: float = brush_radius
+		if GameData.glint_scouting:
+			glint_radius += GameData.scout_fog_erase_bonus
+		_erase_at(glint.global_position, glint_radius)
 	if not _mask_dirty:
 		return
 	_save_timer += delta
@@ -315,6 +341,13 @@ const _OCTANTS: Array = [
 	[0, 1, -1, 0], [1, 0, 0, -1],
 ]
 
+# Cells (grid distance, not world px) around the origin that _visible_cells()
+# always force-includes regardless of shadowcasting's own result — see that
+# function's own comment for why. ~2 cells covers the same footprint the
+# old flat 3x3 used to, just checked by actual distance now instead of a
+# square range.
+const FORCE_VISIBLE_RADIUS_CELLS: float = 2.0
+
 func _is_blocking_cell(cell: Vector2i) -> bool:
 	if _terrain == null:
 		return false
@@ -327,25 +360,31 @@ func _visible_cells(origin_cell: Vector2i, max_radius: int) -> Dictionary:
 	var visible: Dictionary = {origin_cell: true}
 	for octant in _OCTANTS:
 		_scan_octant(origin_cell, 1, 1.0, 0.0, max_radius, octant, visible)
-	# The immediate ring around her is always visible regardless of what
+	# The immediate area around her is always visible regardless of what
 	# the slope math decides — cells right next to the origin are exactly
 	# where shadowcasting's slope comparisons are most prone to edge-case
 	# misses (confirmed by testing: an isolated black square right next to
-	# her with nothing actually blocking it). Still wall-aware though: a
-	# diagonal neighbor only gets forced visible if it isn't itself solid
-	# AND isn't cut off by a solid corner (both of its orthogonal neighbors
-	# blocking) — skipping that check let this ring reveal a diagonally
-	# adjacent room straight through a single-tile wall corner, which real
-	# cave layouts have plenty of (confirmed: violated this file's own
-	# "never reveal unseen areas" guarantee). Cardinal neighbors don't need
-	# the same guard — a cardinal neighbor being solid just marks a wall
-	# tile explored, not a floor tile behind it.
-	for dx in range(-1, 2):
-		for dy in range(-1, 2):
+	# her with nothing actually blocking it). Selected by actual distance
+	# now, not a flat 3x3 square — a square patch is one more non-circular
+	# shape in a system that's otherwise entirely round (the erase brush's
+	# own falloff is distance-based), and it showed as a visibly blocky
+	# artifact right at her feet. Still wall-aware: a non-origin cell only
+	# gets forced visible if it isn't itself solid, and a diagonal one also
+	# needs to not be cut off by a solid corner (both of its orthogonal
+	# neighbors blocking) — skipping that check let this patch reveal a
+	# diagonally adjacent room straight through a single-tile wall corner,
+	# which real cave layouts have plenty of (confirmed: violated this
+	# file's own "never reveal unseen areas" guarantee).
+	for dx in range(-2, 3):
+		for dy in range(-2, 3):
+			if dx == 0 and dy == 0:
+				continue
+			if Vector2(dx, dy).length() > FORCE_VISIBLE_RADIUS_CELLS:
+				continue
 			var cell: Vector2i = origin_cell + Vector2i(dx, dy)
+			if _is_blocking_cell(cell):
+				continue
 			if dx != 0 and dy != 0:
-				if _is_blocking_cell(cell):
-					continue
 				var corner_cut: bool = _is_blocking_cell(origin_cell + Vector2i(dx, 0)) \
 						and _is_blocking_cell(origin_cell + Vector2i(0, dy))
 				if corner_cut:
@@ -391,16 +430,24 @@ func _scan_octant(origin: Vector2i, start_row: int, start_slope: float, end_slop
 		if blocked:
 			break
 
-func _erase_at(world_pos: Vector2) -> void:
+# radius < 0 (the default) means "use the normal brush_radius" — a
+# sentinel instead of defaulting the param directly to brush_radius since
+# that's an @export var, not a true constant. Callers pass an explicit
+# value only when they need a different radius for this one erase (see
+# _physics_process()'s scouting-only bonus).
+func _erase_at(world_pos: Vector2, radius: float = -1.0) -> void:
 	if _terrain == null:
 		return
+	if radius < 0.0:
+		radius = brush_radius
 	var origin_cell: Vector2i = _terrain.local_to_map(_terrain.to_local(world_pos))
 	var cell_size: Vector2 = Vector2(_terrain.tile_set.tile_size)
-	var max_radius_cells: int = int(ceil(brush_radius / cell_size.x)) + 1
-	var visible: Dictionary = _visible_cells(origin_cell, max_radius_cells)
+	var max_radius_cells: int = int(ceil(radius / cell_size.x)) + 1
+	# TEMPORARY — see debug_disable_wall_check's own comment.
+	var visible: Dictionary = {} if debug_disable_wall_check else _visible_cells(origin_cell, max_radius_cells)
 
 	var center: Vector2 = (world_pos - world_rect.position) / mask_scale
-	var radius_px: float = brush_radius / mask_scale
+	var radius_px: float = radius / mask_scale
 	var min_x := int(max(0, floor(center.x - radius_px)))
 	var max_x := int(min(_mask_size.x - 1, ceil(center.x + radius_px)))
 	var min_y := int(max(0, floor(center.y - radius_px)))
@@ -411,20 +458,26 @@ func _erase_at(world_pos: Vector2) -> void:
 			var dist: float = Vector2(x, y).distance_to(center)
 			if dist > radius_px:
 				continue
-			var pixel_world: Vector2 = world_rect.position + Vector2(x, y) * mask_scale
-			# Bilinear blend across the 4 nearest cells instead of a hard
-			# per-cell yes/no — visibility is computed per 16px tile, which
-			# would otherwise show as a blocky cutoff at every tile
-			# boundary; this fades smoothly across each boundary the same
-			# way the brush's own outer edge already does.
-			var frac_cell: Vector2 = _terrain.to_local(pixel_world) / cell_size
-			var cell_floor := Vector2i(int(floor(frac_cell.x)), int(floor(frac_cell.y)))
-			var t: Vector2 = frac_cell - Vector2(cell_floor)
-			var v00: float = 1.0 if visible.has(cell_floor) else 0.0
-			var v10: float = 1.0 if visible.has(cell_floor + Vector2i(1, 0)) else 0.0
-			var v01: float = 1.0 if visible.has(cell_floor + Vector2i(0, 1)) else 0.0
-			var v11: float = 1.0 if visible.has(cell_floor + Vector2i(1, 1)) else 0.0
-			var visibility_factor: float = lerp(lerp(v00, v10, t.x), lerp(v01, v11, t.x), t.y)
+			# TEMPORARY branch — debug_disable_wall_check skips the tile
+			# visibility check entirely, treating everything within the
+			# circle as visible regardless of walls.
+			var visibility_factor: float = 1.0
+			if not debug_disable_wall_check:
+				var pixel_world: Vector2 = world_rect.position + Vector2(x, y) * mask_scale
+				# Bilinear blend across the 4 nearest cells instead of a
+				# hard per-cell yes/no — visibility is computed per 16px
+				# tile, which would otherwise show as a blocky cutoff at
+				# every tile boundary; this fades smoothly across each
+				# boundary the same way the brush's own outer edge already
+				# does.
+				var frac_cell: Vector2 = _terrain.to_local(pixel_world) / cell_size
+				var cell_floor := Vector2i(int(floor(frac_cell.x)), int(floor(frac_cell.y)))
+				var t: Vector2 = frac_cell - Vector2(cell_floor)
+				var v00: float = 1.0 if visible.has(cell_floor) else 0.0
+				var v10: float = 1.0 if visible.has(cell_floor + Vector2i(1, 0)) else 0.0
+				var v01: float = 1.0 if visible.has(cell_floor + Vector2i(0, 1)) else 0.0
+				var v11: float = 1.0 if visible.has(cell_floor + Vector2i(1, 1)) else 0.0
+				visibility_factor = lerp(lerp(v00, v10, t.x), lerp(v01, v11, t.x), t.y)
 			if visibility_factor <= 0.0:
 				continue
 			# smoothstep, not a straight linear ramp — eases in/out at the
@@ -446,7 +499,7 @@ func _erase_at(world_pos: Vector2) -> void:
 	var window_world := Rect2(
 		world_rect.position + Vector2(_window_origin) * mask_scale,
 		Vector2(window_size) * mask_scale)
-	if window_world.intersects(Rect2(world_pos - Vector2.ONE * brush_radius, Vector2.ONE * brush_radius * 2.0)):
+	if window_world.intersects(Rect2(world_pos - Vector2.ONE * radius, Vector2.ONE * radius * 2.0)):
 		_sync_window()
 
 func _load_saved_mask() -> void:
@@ -459,3 +512,99 @@ func _load_saved_mask() -> void:
 	# would otherwise erase at the wrong positions instead of failing safe.
 	if loaded.load_png_from_buffer(bytes) == OK and loaded.get_size() == _mask_size:
 		_full_image = loaded
+
+# ── Permanent reveal zones ───────────────────────────────────────────────────
+# Areas that should just never be fogged — a boss arena you want visible from
+# the start, say — instead of only clearing as she explores them. Scene-
+# authored, not hand-listed in script: any Area2D placed anywhere in the
+# scene and added to the "fog_reveal_zone" group gets its CollisionShape2D
+# bounds permanently erased from the mask, no exploration required. Purely a
+# marker — give it monitoring/monitorable = false and collision_layer/mask =
+# 0 in the editor, it never needs to actually detect anything.
+func _reveal_permanent_zones() -> void:
+	for zone in get_tree().get_nodes_in_group("fog_reveal_zone"):
+		if not zone is Area2D:
+			continue
+		for child in zone.get_children():
+			if child is CollisionShape2D and child.shape != null:
+				_reveal_shape(child)
+
+# Shape-aware — dispatches to the actual shape type instead of always
+# filling its bounding box. Confirmed bug: Shape2D.get_rect() ALWAYS
+# returns a shape's bounding rect regardless of its real footprint, so a
+# CircleShape2D zone was revealing as its bounding square, not a circle.
+func _reveal_shape(collision_shape: CollisionShape2D) -> void:
+	var shape := collision_shape.shape
+	if shape is CircleShape2D:
+		_reveal_circle(collision_shape.global_position, shape.radius)
+		return
+	# RectangleShape2D (correct as-is) and anything else without a
+	# dedicated case (approximated by its bounding box).
+	var local_rect: Rect2 = shape.get_rect()
+	var top_left: Vector2 = collision_shape.to_global(local_rect.position)
+	var bottom_right: Vector2 = collision_shape.to_global(local_rect.position + local_rect.size)
+	_reveal_rect(Rect2(top_left, bottom_right - top_left))
+
+# World px beyond a reveal zone's exact edge that the reveal fades out
+# over, instead of stopping dead — matches _erase_at()'s own "smoothstep,
+# not a hard cutoff" edge treatment, so a permanent reveal zone's boundary
+# reads the same as the exploration brush's, not as a visibly different
+# hard-edged patch.
+const FOG_REVEAL_EDGE_SOFTNESS: float = 32.0
+
+# Same pixel-writing shape as _reveal_rect() below, but a real distance
+# check against radius_px instead of a blanket rect fill — a circle's
+# rotation never matters (rotation-invariant), so global_position + radius
+# alone is exact, no transform-corner approximation needed the way a
+# rotated rectangle would.
+func _reveal_circle(world_center: Vector2, world_radius: float) -> void:
+	var center: Vector2 = (world_center - world_rect.position) / mask_scale
+	var radius_px: float = world_radius / mask_scale
+	var softness_px: float = FOG_REVEAL_EDGE_SOFTNESS / mask_scale
+	var min_x := int(max(0, floor(center.x - radius_px - softness_px)))
+	var max_x := int(min(_mask_size.x - 1, ceil(center.x + radius_px + softness_px)))
+	var min_y := int(max(0, floor(center.y - radius_px - softness_px)))
+	var max_y := int(min(_mask_size.y - 1, ceil(center.y + radius_px + softness_px)))
+	for y in range(min_y, max_y + 1):
+		for x in range(min_x, max_x + 1):
+			var dist: float = Vector2(x, y).distance_to(center)
+			if dist > radius_px + softness_px:
+				continue
+			# 1.0 fully inside the real radius, easing down to 0.0 by
+			# softness_px beyond it — smoothstep, not a linear ramp, same
+			# reasoning _erase_at()'s own brush-edge comment gives.
+			var reveal_strength: float = 1.0 - smoothstep(radius_px, radius_px + softness_px, dist)
+			var existing_alpha: float = _full_image.get_pixel(x, y).a
+			var new_alpha: float = min(existing_alpha, 1.0 - reveal_strength)
+			if new_alpha < existing_alpha:
+				_full_image.set_pixel(x, y, Color(0.0, 0.0, 0.0, new_alpha))
+	_mask_dirty = true
+
+# Unconditionally erases a world-space rect in the mask (plus a soft fading
+# margin beyond its edge — see FOG_REVEAL_EDGE_SOFTNESS) — no shadowcasting
+# unlike _erase_at()'s brush, since there's nothing to be "visible from"
+# here; the whole point is this area's fog state isn't earned by exploring,
+# it's just permanently off.
+func _reveal_rect(zone_world_rect: Rect2) -> void:
+	var softness_px: float = FOG_REVEAL_EDGE_SOFTNESS / mask_scale
+	var rect_min: Vector2 = (zone_world_rect.position - world_rect.position) / mask_scale
+	var rect_max: Vector2 = (zone_world_rect.position + zone_world_rect.size - world_rect.position) / mask_scale
+	var min_x := int(max(0, floor(rect_min.x - softness_px)))
+	var max_x := int(min(_mask_size.x - 1, ceil(rect_max.x + softness_px)))
+	var min_y := int(max(0, floor(rect_min.y - softness_px)))
+	var max_y := int(min(_mask_size.y - 1, ceil(rect_max.y + softness_px)))
+	for y in range(min_y, max_y + 1):
+		for x in range(min_x, max_x + 1):
+			# Distance from (x,y) to the rect's nearest edge — 0 if inside
+			# the rect itself, the real outside distance otherwise.
+			var dx: float = max(max(rect_min.x - x, 0.0), x - rect_max.x)
+			var dy: float = max(max(rect_min.y - y, 0.0), y - rect_max.y)
+			var dist_outside: float = sqrt(dx * dx + dy * dy)
+			if dist_outside > softness_px:
+				continue
+			var reveal_strength: float = 1.0 - smoothstep(0.0, softness_px, dist_outside)
+			var existing_alpha: float = _full_image.get_pixel(x, y).a
+			var new_alpha: float = min(existing_alpha, 1.0 - reveal_strength)
+			if new_alpha < existing_alpha:
+				_full_image.set_pixel(x, y, Color(0.0, 0.0, 0.0, new_alpha))
+	_mask_dirty = true

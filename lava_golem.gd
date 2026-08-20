@@ -55,7 +55,7 @@ func _perform_attack() -> void:
 			elana.take_damage(attack_damage, false, self)
 			if elana.has_method("apply_player_burn"):
 				elana.apply_player_burn(monster_burn_damage, monster_burn_ticks)
-	attack_cooldown = attack_cooldown_time
+	attack_cooldown = get_effective_attack_cooldown()
 
 func modify_incoming_damage(_hit_direction: int, damage: int) -> int:
 	if not _cracked:
