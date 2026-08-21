@@ -18,16 +18,26 @@ extends CharacterBody2D
 #     duration, knocking everything back around her on the way up. Fresh
 #     anchors spawn again once back UP, so the cycle repeats.
 #
-# Physically confined to web ground (2026-08-20): broodspawner.tscn's root
-# sets collision_mask = 16 (bit 5), NOT the normal terrain bit (1) every
-# other body stands on. cave_tileset.tres reserves that bit as
-# physics_layer_1, a second physics layer only web-tagged tiles are meant to
-# carry a collision polygon on (in addition to their normal physics_layer_0
-# polygon everyone else still uses) — so she can only ever stand on tiles
-# that are both hazard="web" and have that second polygon painted. Until an
-# arena actually paints web tiles with that polygon, she falls through any
-# floor she's placed on — expected, not a bug, per explicit user choice to
-# wire this up ahead of the arena existing.
+# Physically confined to web ground, per-layer, PURELY by hazard label
+# (2026-08-20, reworked 2026-08-21 into per-layer physics bits, reworked
+# AGAIN 2026-08-21 same session into this — user explicit requirement,
+# verbatim: "spider will not collide to any terrain unless its hazard is
+# webFloor1-4" / "i want to remove collision first on webwall. and that
+# thing on layer mask" / "have collision with the hazard type that was set
+# to collide"). root collision_mask is permanently 0 — Godot's real physics
+# engine plays NO role in stopping her anymore, for floors or walls. Instead
+# _apply_gravity() manually reads the actual "hazard" custom-data value on
+# the tile at her feet every frame (via terrain_path, see
+# _get_hazard_at_feet()) and only stops her falling if it exactly matches
+# WEBFLOOR_HAZARD_NAMES[_current_floor_layer] OR WEBBRIDGE_HAZARD_NAMES[
+# _current_floor_layer] (2026-08-21, user request — webBridgeN tiles count
+# as real ground for layer N exactly like webFloorN does) — nothing else
+# counts, not a physics polygon, not any other tile, nothing.
+# _current_floor_layer (default 0/"webFloor1" from _ready()) is changed by
+# _set_active_floor_layer() whenever she ascends/descends (see the "Layer
+# Jumping" export group).
+# webWall collision was removed in this same pass and has no replacement
+# yet — nothing currently blocks her horizontally at all.
 #
 # Not physically solid to anyone (2026-08-20 fix): root collision_layer = 0.
 # Originally copied Hollowfang's collision_layer = 3, but that's specific to
@@ -35,8 +45,32 @@ extends CharacterBody2D
 # was never meant to work that way; bit 1 of that value is the shared terrain
 # layer, which let Elana and enemies stand on top of her. Zeroed out so
 # nobody's move_and_slide() ever treats her as solid — everyone (Elana,
-# enemies) passes straight through her body. Her own collision_mask = 16
-# above is unrelated (what SHE stands on), untouched by this.
+# enemies) passes straight through her body. Her own collision_mask above is
+# unrelated (what SHE stands on), untouched by this.
+
+# The one and only authority for whether she can stand somewhere (2026-08-21
+# — see the header comment above for the full history of why this replaced
+# the physics-bit system entirely). No physics_layer/collision_mask
+# involvement left at all for floors.
+# Capitalized "webFloor1"/etc, NOT all-lowercase "webfloor1" (2026-08-21 fix)
+# -- string comparison is case-sensitive, and the real painted tiles use
+# capital F (confirmed via GRAVITY CHECK log: actual_hazard="webFloor1"
+# never matched the all-lowercase expected_hazard this const used to have,
+# even though everything else was working correctly by that point). Matches
+# the "webFloor"/"webWall" capitalization convention already established
+# earlier this session for the original single (pre-per-layer) tag.
+# Layers 2-4's real capitalization hasn't been confirmed the same way yet
+# (no painted tiles for them at time of writing) -- assumed to follow the
+# same "webFloorN" convention, fix if that turns out wrong once painted.
+const WEBFLOOR_HAZARD_NAMES: Array[String] = ["webFloor1", "webFloor2", "webFloor3", "webFloor4"]
+# Second valid tag per layer (2026-08-21, user request: "add behaviour for
+# tiles tagged as webBridge1 with webFloor1 and so on... spider can walk on
+# them too when active") -- webBridgeN counts as real ground for layer N
+# exactly the same as webFloorN does, checked alongside it in
+# _apply_gravity(). Same capitalization convention/caveat as
+# WEBFLOOR_HAZARD_NAMES above -- not yet confirmed against a real painted
+# webBridge tile.
+const WEBBRIDGE_HAZARD_NAMES: Array[String] = ["webBridge1", "webBridge2", "webBridge3", "webBridge4"]
 
 @export var max_hp: int = 1200
 @export var defense: int = 50
@@ -58,6 +92,19 @@ var direction: int = 1
 # instancing her (drag the sibling nodes in from the level scene's tree).
 @export var arena_box_path: NodePath
 @export var arena_floor_zone_path: NodePath
+# 4-layer arena support (2026-08-21, user design) — each entry is a wide
+# Area2D+CollisionShape2D (RectangleShape2D) spanning one vertical platform
+# layer's full playable space, same independent-sibling convention as
+# ArenaBox/ArenaFloorZone above. Order doesn't matter — layers are looked up
+# by whichever one's bounds actually contain a given position, not by index
+# meaning "higher."
+@export var platform_layer_paths: Array[NodePath] = []
+# The level's Terrain TileMap (2026-08-21, user requirement: "SPIDER COLLIDES
+# WITH TERRAIN. ONLY IF HAZARD IS WEBFLOOR1-4... dont collide by other
+# terrain aside fom that hazard value"). Needed to read a tile's actual
+# "hazard" custom-data value at runtime -- see _get_hazard_at_feet(). Wire
+# to the same "Terrain" TileMap node terrain_hazards.gd is attached to.
+@export var terrain_path: NodePath
 
 @export_group("Web Anchors")
 @export var anchor_count: int = 4
@@ -100,7 +147,7 @@ var direction: int = 1
 @export var down_landing_stun: float = 2.0
 @export var down_landing_knockback: float = 300.0
 @export var down_landing_knockback_radius: float = 232.0
-@export var down_chase_speed: float = 50.0
+@export var down_chase_speed: float = 90.0
 # Stops closing the gap once within this horizontal distance (2026-08-20,
 # user request — no need to walk until their bodies are centered on top of
 # each other, just close enough to stay in attack range).
@@ -110,6 +157,62 @@ var direction: int = 1
 # the instant _is_using_attack clears, reading as the lunge continuing
 # straight into a walk.
 @export var down_post_attack_pause: float = 0.5
+
+@export_group("Layer Jumping")
+# FULL REWORK 2026-08-21, user design ("remake this shit... real velocity
+# jump when going up... enable the target layer collision at the highest
+# point of the jump... for descend, remove collision of current layer, then
+# enable the target layer"). Replaces the earlier fully-scripted position-
+# teleport system (which guessed a landing Y via layer_jump_landing_overshoot
+# — see git history) with real gravity: _current_floor_layer (see
+# _set_active_floor_layer()) tracks which layer she's meant to be able to
+# land on, and _apply_gravity() manually checks the actual hazard label at
+# her feet each frame to decide whether to stop her (see the header comment
+# — no physics_layer/collision_mask involvement left for this at all,
+# reworked a second time same session away from an earlier per-layer-bit
+# version).
+# - Ascending (target layer is physically higher/higher index): dips DOWN
+#   first as a scripted anticipation crouch (layer_jump_ascend_dip_distance
+#   over layer_jump_ascend_dip_duration, unchanged from before), then a REAL
+#   upward velocity push (layer_jump_ascend_base_velocity plus
+#   layer_jump_ascend_velocity_increment per extra layer crossed) with every
+#   floor bit
+#   disabled so she passes clean through whatever she's climbing past — only
+#   webWall can stop her. The instant she crests (velocity.y goes from
+#   negative to >= 0), the target layer's floor bit turns on and real gravity
+#   takes over from there — see _do_ascend_jump().
+# - Descending (target layer is physically lower/lower index): no scripted
+#   movement at all, just swaps which floor bit is active and lets real
+#   gravity carry her down — see _do_descend_jump().
+# - The initial UP->DOWN drop (_go_down()) uses the same _do_descend_jump()
+#   as any other descend now, targeting Platform Layer 1 (index 0) — no
+#   longer a separate scripted-duration fall.
+@export var layer_jump_ascend_dip_distance: float = 20.0
+@export var layer_jump_ascend_dip_duration: float = 0.2
+# Scales with how many layers she's crossing (2026-08-22, user design,
+# retuned twice same session -- current values: base 680 for a 1-layer jump,
+# 880 for 2 layers, 1080 for 3 layers). Actual push is base + increment ×
+# (layers_crossed - 1), computed fresh each ascend in _do_ascend_jump()
+# (target_layer - _current_floor_layer, captured before anything else
+# changes _current_floor_layer).
+@export var layer_jump_ascend_base_velocity: float = 680.0
+@export var layer_jump_ascend_velocity_increment: float = 200.0
+# Safety cutoffs, not tuned gameplay feel -- just guard against her never
+# reaching a peak (ascend_timeout) or never actually landing because a
+# target layer's floor isn't painted yet (fall_timeout), so a transition
+# can't leave her permanently stuck mid-air with chase/attacks locked out.
+@export var layer_jump_ascend_timeout: float = 2.0
+@export var layer_jump_fall_timeout: float = 3.0
+# Debounces the jump trigger (2026-08-21, user design) -- instead of jumping
+# the instant a layer mismatch is seen, the mismatched layer gets remembered
+# and this much time has to pass with Elana STILL on that same layer before
+# she actually commits to the jump. If Elana moves to yet another layer
+# during the wait, the remembered layer/timer both reset to the new one and
+# the wait starts over -- repeats until Elana holds still on one layer for a
+# full uninterrupted window. Stops her flickering/re-triggering off Elana
+# briefly crossing layers. See _pending_jump_target_layer/_pending_jump_timer
+# and _apply_horizontal_movement().
+@export var layer_jump_detection_delay: float = 2.0
 
 @export_group("Venom Bite")
 @export var venom_bite_enabled: bool = false
@@ -210,6 +313,58 @@ var _is_going_up: bool = false
 # Captured once in _ready() — where she returns to when going back UP,
 # since chasing (DOWN phase) moves her away from her placed position.
 var _origin_position: Vector2 = Vector2.ZERO
+# 2026-08-21 additions — see _apply_horizontal_movement()/_do_layer_jump()
+# below. Resolved once in _ready() from platform_layer_paths.
+var _platform_layers: Array[Node] = []
+# Guards against re-entry the same way _is_using_attack/_is_going_up do —
+# also disables gravity/move_and_slide() for the duration (see
+# _apply_gravity()/_physics_process()) so the scripted arc has total,
+# uncontested control over her position.
+var _is_jumping: bool = false
+# Guards the real-physics ascend/descend (2026-08-21 rework) the same way
+# _is_jumping/_is_using_attack/_is_going_up guard everything else -- blocks
+# chase/attacks/another jump from firing mid-transition (see
+# _apply_horizontal_movement()/_tick_down()). Deliberately NOT checked by
+# _apply_gravity()/_physics_process()'s move_and_slide() skip the way
+# _is_jumping is -- during a layer transition we WANT real gravity and real
+# collision running every frame, that's the entire point of this system.
+var _is_layer_transitioning: bool = false
+# True only during ascend's rising phase specifically, before the peak's been
+# reached (2026-08-21) -- _tick_layer_transition() checks this to know
+# whether it's still watching for the peak or already watching for a
+# landing. False for the whole descend (no rise phase at all) and false
+# again for ascend's own fall-after-peak.
+var _is_ascending: bool = false
+# Which layer _tick_layer_transition() should enable once ascend's peak is
+# reached (2026-08-21) -- descend doesn't need this, it enables its target
+# immediately.
+var _layer_transition_target: int = -1
+# How long the current phase (rising, or falling/waiting to land) has been
+# going, ticked in _tick_layer_transition() -- compared against
+# layer_jump_ascend_timeout/layer_jump_fall_timeout as a safety cutoff so a
+# transition can't leave her stuck mid-air forever. Reset to 0 whenever the
+# phase changes.
+var _layer_transition_elapsed: float = 0.0
+# Tracks whichever layer index _set_active_floor_layer() last set, -1 if none
+# (2026-08-21 rework) -- her own "current layer" no longer needs to be
+# geometrically guessed from her position via _get_layer_index_for_position()
+# the way Elana's still is; the game already knows directly, since it's the
+# thing that chose which floor bit is active. Sidesteps the whole class of
+# boundary-edge bugs this session hit repeatedly (landing exactly on a shared
+# zone edge reading as the wrong layer, "-1" at a zone's own boundary, etc.)
+# for her side of the comparison at least.
+var _current_floor_layer: int = -1
+# Debounced jump-trigger state (2026-08-21, see layer_jump_detection_delay
+# above for the full design). -1 means nothing's currently being watched.
+var _pending_jump_target_layer: int = -1
+var _pending_jump_timer: float = 0.0
+# Manual replacement for CharacterBody2D's built-in is_on_floor() (2026-08-21
+# -- her collision_mask is permanently 0 now, so the real physics engine
+# never sets this on its own anymore). Set every frame in _apply_gravity()
+# based purely on whether the hazard label at her feet matches
+# _current_floor_layer's expected string -- read by _tick_layer_transition()
+# in place of is_on_floor().
+var _is_on_real_floor: bool = false
 # Same source/pattern base_enemy.gd and elana.gd both use (project default,
 # not a made-up value) — var, not const, since ProjectSettings.get_setting()
 # is a method call and can't be a constant expression.
@@ -228,6 +383,7 @@ var gravity = ProjectSettings.get_setting("physics/2d/default_gravity")
 @onready var _leg_pierce_zone: Area2D = $LegPierceZone
 @onready var _arena_box: Node = get_node_or_null(arena_box_path)
 @onready var _arena_floor_zone: Node = get_node_or_null(arena_floor_zone_path)
+@onready var _terrain: TileMap = get_node_or_null(terrain_path)
 
 func _ready() -> void:
 	if GameData.is_removed(get_tree().current_scene.scene_file_path, name):
@@ -244,6 +400,24 @@ func _ready() -> void:
 		_arena_box.body_entered.connect(_on_arena_box_body_entered)
 	else:
 		push_warning("Broodspawner: arena_box_path not wired — she'll never start fighting (spit/floor eggs stay dormant).")
+	for p in platform_layer_paths:
+		var layer_node := get_node_or_null(p)
+		if layer_node != null:
+			_platform_layers.append(layer_node)
+	if _platform_layers.is_empty():
+		push_warning("Broodspawner: no platform_layer_paths wired — she'll only chase horizontally, never jump between layers.")
+	if _terrain == null:
+		push_warning("Broodspawner: terrain_path not wired — floor detection (_get_hazard_at_feet()) can't read any tile, she'll fall through everything.")
+	# Default floor is webfloor1 from the moment she loads, while still UP
+	# (2026-08-21, user request: "set it while on UP so we dont set anything
+	# new first until it sets on a floor") -- previously _current_floor_layer
+	# only ever became 0 the first time _go_down() ran _do_descend_jump(0);
+	# setting it here instead means that's no longer a "first assignment,"
+	# it's already correct and intentional before she ever goes DOWN at all.
+	# Inert while UP either way (_apply_gravity() zeroes velocity.y unless
+	# _is_down), this just makes it true from the start instead of by
+	# coincidence of a leftover static collision_mask value in the .tscn.
+	_set_active_floor_layer(0)
 	# NOTE: the auto-sync that used to live here (copying CollisionPolygon2D's
 	# polygon/position onto LegPierceZone's Polygon2D every _ready()) was
 	# removed 2026-08-21 — same mistake as the body sync below, just caught
@@ -270,33 +444,70 @@ func _on_arena_box_body_entered(body: Node) -> void:
 		_arena_triggered = true
 
 func _physics_process(delta: float) -> void:
+	# Stuck-in-tile recovery removed (2026-08-21) -- it relied on a real
+	# physics shape-overlap query, which can never find anything now that
+	# collision_mask is permanently 0. Getting physically embedded in
+	# something isn't possible under the fully-manual hazard-only floor
+	# system this session ended on -- see the header comment.
 	_update_facing()
 	_apply_gravity(delta)
+	# Ascend peak-detection / either direction's landing-detection (2026-08-21,
+	# see _tick_layer_transition()'s own comment) -- runs before
+	# _apply_horizontal_movement() below so a transition that finishes THIS
+	# frame is already cleared in time for that frame's jump-trigger check,
+	# same ordering _apply_gravity() needs relative to move_and_slide().
+	_tick_layer_transition(delta)
 	_apply_horizontal_movement(delta)
 	_update_hp_bar()
 	if _is_down:
 		_tick_down(delta)
 	else:
 		_tick_up(delta)
-	move_and_slide()
+	# Skipped only for the handful of remaining fully-scripted moves gated by
+	# _is_jumping (the ascend's anticipation dip, attack lunges/windups) --
+	# those write global_position directly every step. move_and_slide() still
+	# runs every other frame purely to apply velocity to position (horizontal
+	# chase, vertical gravity) -- it has nothing to actually collide with
+	# anymore (collision_mask is permanently 0), all real stopping happens
+	# manually in _apply_gravity() via the hazard-label check instead.
+	if not _is_jumping:
+		move_and_slide()
 
 # Real gravity (2026-08-20, user request), but only while DOWN — UP means
 # she's up off the web, safe and summoning, and isn't meant to need ground
 # under her at all; DOWN means she's actually landed, which is when
-# standing on real web ground matters. Same accumulate-while-airborne,
-# hold-at-zero-while-grounded pattern base_enemy.gd's own _apply_gravity()
-# uses, just gated to _is_down. is_on_floor() only ever returns true once a
-# tile has BOTH the "web" hazard custom-data tag AND an actual
-# physics_layer_1 collision polygon painted on it — the custom-data tag
-# alone (what terrain_hazards.gd reads for the player-status web-wrap
-# mechanic) has no effect on physics collision at all.
+# standing on real web ground matters. Floor detection is fully manual now
+# (2026-08-21 -- see the header comment) -- is_on_floor() is never checked
+# anywhere in this file anymore, since her collision_mask is permanently 0
+# and Godot's real physics has nothing to collide with. Instead this reads
+# the hazard label at her feet directly (_get_hazard_at_feet()) and only
+# holds her in place if it exactly matches
+# WEBFLOOR_HAZARD_NAMES[_current_floor_layer] -- nothing else, ever.
+# _is_on_real_floor is the tracked replacement for is_on_floor(), read by
+# _tick_layer_transition() below. This function doesn't check
+# _is_layer_transitioning — gravity is meant to apply normally throughout an
+# ascend/descend, that's the whole point of the real-physics rework.
 func _apply_gravity(delta: float) -> void:
+	if _is_jumping:
+		velocity.y = 0.0
+		return
 	if _is_down:
-		if not is_on_floor():
+		var expected_floor: String = ""
+		var expected_bridge: String = ""
+		if _current_floor_layer >= 0 and _current_floor_layer < WEBFLOOR_HAZARD_NAMES.size():
+			expected_floor = WEBFLOOR_HAZARD_NAMES[_current_floor_layer]
+			expected_bridge = WEBBRIDGE_HAZARD_NAMES[_current_floor_layer]
+		var actual_hazard: String = _get_hazard_at_feet()
+		var was_on_real_floor: bool = _is_on_real_floor
+		_is_on_real_floor = expected_floor != "" and (actual_hazard == expected_floor or actual_hazard == expected_bridge)
+		if _is_on_real_floor and not was_on_real_floor:
+			print("[Broodspawner] FLOOR COLLISION: pos=%s hazard=\"%s\"" % [global_position, actual_hazard])
+		if not _is_on_real_floor:
 			velocity.y += gravity * delta
 		elif velocity.y > 0.0:
 			velocity.y = 0.0
 	else:
+		_is_on_real_floor = false
 		velocity.y = 0.0
 
 # Chases Elana horizontally while DOWN, once the landing stun's worn off
@@ -315,14 +526,189 @@ func _apply_gravity(delta: float) -> void:
 func _apply_horizontal_movement(delta: float) -> void:
 	if _post_attack_pause_timer > 0.0:
 		_post_attack_pause_timer -= delta
-	if _is_down and _down_stun_timer <= 0.0 and _post_attack_pause_timer <= 0.0 and not _is_using_attack and not _is_going_up:
+	if _is_down and _down_stun_timer <= 0.0 and _post_attack_pause_timer <= 0.0 and not _is_using_attack and not _is_going_up and not _is_jumping and not _is_layer_transitioning:
 		var elana = get_tree().get_first_node_in_group("player")
-		if elana != null and abs(elana.global_position.x - global_position.x) <= down_chase_stop_distance:
-			velocity.x = 0.0
+		if elana != null:
+			# Layer jump takes priority over the normal horizontal chase
+			# (2026-08-21, user design) — if Elana's on a different
+			# platform_layer_paths zone than she is, jump there instead of
+			# walking (real velocity ascend / real-gravity descend, see
+			# _do_ascend_jump()/_do_descend_jump() — full rework 2026-08-21,
+			# user design: "remake this shit... real velocity jump when
+			# going up... enable the target layer collision"). Calling an
+			# async func without awaiting it still runs its body synchronously
+			# up to its first await, so whichever guard flag it sets first
+			# (_is_layer_transitioning for descend, _is_jumping for ascend's
+			# dip phase — either way the combined guard above covers it) is
+			# already true before this function returns, same frame — can't
+			# re-trigger itself next frame (same re-entry-guard pattern
+			# _go_up() needed fixing for earlier).
+			if not _platform_layers.is_empty():
+				var elana_layer: int = _get_layer_index_for_position(elana.global_position)
+				# Her own layer is read directly from _current_floor_layer
+				# now (2026-08-21) instead of re-deriving it geometrically —
+				# see that var's declaration comment.
+				if elana_layer != -1 and _current_floor_layer != -1 and elana_layer != _current_floor_layer:
+					# Debounced (2026-08-21, user design, see
+					# layer_jump_detection_delay's declaration comment) --
+					# doesn't jump the instant a mismatch is seen. Remembers
+					# which layer Elana's on and waits; only jumps if she's
+					# STILL on that same layer once the delay elapses. If she
+					# moves to a different layer mid-wait, the remembered
+					# layer/timer reset to the new one and the wait restarts.
+					if elana_layer != _pending_jump_target_layer:
+						_pending_jump_target_layer = elana_layer
+						_pending_jump_timer = 0.0
+					else:
+						_pending_jump_timer += delta
+						if _pending_jump_timer >= layer_jump_detection_delay:
+							_pending_jump_target_layer = -1
+							_pending_jump_timer = 0.0
+							velocity = Vector2.ZERO
+							# Higher index = physically higher up (PlatformLayer1
+							# is index 0/lowest, PlatformLayer4 is index
+							# 3/highest) -- ascend vs descend picked by
+							# comparing indices, not Y positions directly,
+							# matching every other layer-index comparison
+							# already in this file.
+							if elana_layer > _current_floor_layer:
+								_do_ascend_jump(elana_layer)
+							else:
+								_do_descend_jump(elana_layer)
+							return
+				else:
+					# No mismatch (or an invalid layer reading) -- nothing
+					# left to debounce, clear any pending watch.
+					_pending_jump_target_layer = -1
+					_pending_jump_timer = 0.0
+			if abs(elana.global_position.x - global_position.x) <= down_chase_stop_distance:
+				velocity.x = 0.0
+			else:
+				velocity.x = down_chase_speed * direction
 		else:
-			velocity.x = down_chase_speed * direction
+			velocity.x = 0.0
 	else:
 		velocity.x = 0.0
+
+# Which platform_layer_paths zone (index into _platform_layers) contains
+# the given world position, or -1 if none do (2026-08-21) — pure geometry
+# against each zone's own RectangleShape2D bounds, not a physics/overlap
+# query. Deliberately NOT using Area2D detection here: her own
+# collision_layer is 0 (nothing detects her physically, see the header
+# comment up top), so a zone's body_entered/get_overlapping_bodies() would
+# never see her — this works identically for both Elana and her own
+# position without needing to touch that.
+func _get_layer_index_for_position(pos: Vector2) -> int:
+	for i in _platform_layers.size():
+		var zone: Node = _platform_layers[i]
+		if zone == null:
+			continue
+		var shape_node: CollisionShape2D = zone.get_node_or_null("CollisionShape2D")
+		if shape_node == null or not (shape_node.shape is RectangleShape2D):
+			continue
+		var rect_shape: RectangleShape2D = shape_node.shape
+		var local_pos: Vector2 = zone.to_local(pos) - shape_node.position
+		var half_size: Vector2 = rect_shape.size / 2.0
+		if abs(local_pos.x) <= half_size.x and abs(local_pos.y) <= half_size.y:
+			return i
+	return -1
+
+# Sets which single platform layer's floor she's currently allowed to land
+# on (2026-08-21 full rework — see the header comment for the whole design).
+# -1 means none at all, so she can't rest on anything -- used while rising
+# mid-ascend (see _do_ascend_jump()). No collision_mask/physics_layer
+# involvement anymore -- this just updates _current_floor_layer, which
+# _apply_gravity() reads every frame to decide (purely from the hazard
+# label at her feet) whether to stop her.
+func _set_active_floor_layer(layer_index: int) -> void:
+	_current_floor_layer = layer_index
+
+# Ascending (2026-08-21, simplified per user request -- "why check per
+# frame in a loop... just do the check simple" -- moved the peak/landing
+# checks into _tick_layer_transition(), called from _physics_process() which
+# already runs every frame regardless, instead of a dedicated await-loop
+# living in here). Same anticipation dip as before (scripted, via
+# _move_for(), _is_jumping true so it still bypasses gravity/collision for
+# that brief moment), then a REAL upward velocity push with the floor target
+# set to -1 (_set_active_floor_layer(-1)) so nothing can stop her rise --
+# there's no wall collision anymore either (removed this same session), so
+# she's fully airborne/unstoppable until the peak. This function itself
+# just sets up the state and returns immediately -- _apply_gravity()/
+# move_and_slide() (already running every frame) do the actual rising and
+# falling; _tick_layer_transition() watches for the peak and the landing.
+func _do_ascend_jump(target_layer: int) -> void:
+	# Captured before anything below changes _current_floor_layer -- this is
+	# how many layers she's actually crossing (2026-08-22, see
+	# layer_jump_ascend_base_velocity's declaration comment).
+	var layers_crossed: int = target_layer - _current_floor_layer
+	_is_jumping = true
+	velocity = Vector2.ZERO
+	await _move_for(Vector2(0, 1), layer_jump_ascend_dip_distance, layer_jump_ascend_dip_duration)
+	_is_jumping = false
+	if not is_instance_valid(self):
+		return
+	_is_layer_transitioning = true
+	_is_ascending = true
+	_layer_transition_target = target_layer
+	_layer_transition_elapsed = 0.0
+	_set_active_floor_layer(-1)
+	velocity.y = -(layer_jump_ascend_base_velocity + layer_jump_ascend_velocity_increment * (layers_crossed - 1))
+
+# Descending (2026-08-21, same simplification as ascend above) — no scripted
+# movement, no loop, no velocity push: just enables the target layer's floor
+# bit and returns immediately. Gravity (already running every frame via
+# _apply_gravity(), completely independent of this function) does the actual
+# falling on its own; _tick_layer_transition() just watches for when she
+# lands. Also used by _go_down() for the initial UP->DOWN drop, targeting
+# layer 0.
+func _do_descend_jump(target_layer: int) -> void:
+	_is_layer_transitioning = true
+	_is_ascending = false
+	_layer_transition_target = target_layer
+	_layer_transition_elapsed = 0.0
+	_set_active_floor_layer(target_layer)
+
+# Raw hazard label of the tile she's actually resting on, sampled just below
+# her origin toward her feet ("" if nothing there, or terrain_path isn't
+# wired). Used by _apply_gravity()'s floor check and
+# _tick_layer_transition()'s floor-collision log.
+func _get_hazard_at_feet() -> String:
+	if _terrain == null:
+		return ""
+	var feet_pos: Vector2 = global_position + Vector2(0, 4.0)
+	var cell: Vector2i = _terrain.local_to_map(_terrain.to_local(feet_pos))
+	var tile_data: TileData = _terrain.get_cell_tile_data(0, cell)
+	return tile_data.get_custom_data("hazard") if tile_data else ""
+
+# Checked once per physics frame from _physics_process() -- reads
+# _is_on_real_floor/velocity.y as set by _apply_gravity() this same frame
+# (runs right after it, see _physics_process()). Two phases: while
+# _is_ascending, watches for the peak (velocity.y crossing from negative to
+# >= 0) and enables the target floor the instant it happens; otherwise
+# (descend, or ascend after its peak), watches for an actual landing.
+# _current_floor_layer always equals _layer_transition_target throughout
+# this second phase (set the instant it starts, by _do_descend_jump() or by
+# the peak branch just above), so _is_on_real_floor being true here already
+# GUARANTEES the hazard matched -- _apply_gravity() computed it against the
+# same _current_floor_layer this same frame. No separate mismatch check
+# needed anymore (2026-08-21, simplified once floor detection became fully
+# hazard-driven -- an earlier version of this had to actively push her
+# through mismatched tiles, back when real physics collision could still
+# stop her on the wrong thing). Either phase gives up after its own timeout
+# so a transition can never leave her stuck mid-air with chase/attacks
+# locked out forever.
+func _tick_layer_transition(delta: float) -> void:
+	if not _is_layer_transitioning:
+		return
+	_layer_transition_elapsed += delta
+	if _is_ascending:
+		if velocity.y >= 0.0 or _layer_transition_elapsed >= layer_jump_ascend_timeout:
+			_set_active_floor_layer(_layer_transition_target)
+			_is_ascending = false
+			_layer_transition_elapsed = 0.0
+	else:
+		if _is_on_real_floor or _layer_transition_elapsed >= layer_jump_fall_timeout:
+			_is_layer_transitioning = false
 
 # Keeps direction facing Elana while DOWN and not mid-attack (locks for the
 # duration of an attack once one starts) — 2026-08-20, user request:
@@ -470,10 +856,27 @@ func _go_down() -> void:
 	_is_going_up = false
 	_down_timer = down_duration
 	_down_attack_cooldown = down_attack_gap
-	_down_stun_timer = down_landing_stun
 	_color_rect.modulate = TINT_DOWN
-	# Landing knockback (2026-08-20, user request) — same AOE pattern
-	# _go_up()'s own transition knockback already uses.
+	# Initial drop (2026-08-21, converted to the real-gravity descend system
+	# same session as the ascend/descend rework — see "Layer Jumping" export
+	# group comment) — enables Platform Layer 1's floor bit; real gravity
+	# carries her down to it from wherever she was UP, same as any other
+	# descend. _do_descend_jump() itself no longer waits for the landing
+	# (simplified 2026-08-21 — see _tick_layer_transition()), so this waits
+	# here instead, specifically because the stun/knockback below needs to
+	# fire at her actual landing spot, not the instant the descend starts.
+	# _tick_down() already no-ops while _is_layer_transitioning is true, same
+	# guard the between-layer descends rely on, so nothing else needs to wait
+	# on this explicitly. Falls back to the old organic-gravity behavior
+	# below if no layers are wired.
+	if not _platform_layers.is_empty():
+		_do_descend_jump(0)
+		while _is_layer_transitioning:
+			await get_tree().physics_frame
+	# Stun + landing knockback (2026-08-20, user request) now fire once
+	# she's actually landed, not from her UP-phase position mid-air — same
+	# AOE pattern _go_up()'s own transition knockback already uses.
+	_down_stun_timer = down_landing_stun
 	for body in _nearby_bodies(down_landing_knockback_radius):
 		if body.is_in_group("player") and body.has_method("apply_knockback"):
 			var away: Vector2 = (body.global_position - global_position)
@@ -487,8 +890,9 @@ func _tick_down(delta: float) -> void:
 	# _is_going_up guards _go_up() itself against re-entry — see its own
 	# declaration comment above (2026-08-20 fix: this used to get called
 	# once per frame for the whole 1s windup, spawning dozens of parallel
-	# coroutines).
-	if _is_using_attack or _is_going_up:
+	# coroutines). _is_jumping/_is_layer_transitioning (2026-08-21) keep an
+	# attack from starting mid-leap between layers, same reasoning.
+	if _is_using_attack or _is_going_up or _is_jumping or _is_layer_transitioning:
 		return
 	if _down_stun_timer > 0.0:
 		_down_stun_timer -= delta
@@ -537,19 +941,29 @@ func _start_random_down_attack() -> void:
 # venom bite lunge already used before this). Used for both attacks' shared
 # "wind back opposite her facing" telegraph. Not used for the lunge itself,
 # which still needs its own loop to layer a hit-check on top each step.
+# No wall-blocking anymore (2026-08-21) -- webWall collision was removed
+# entirely this same session, per direct request; nothing currently stops
+# her horizontally at all.
 func _move_for(dir: Vector2, dist: float, duration: float) -> void:
 	if duration <= 0.0:
 		global_position += dir * dist
 		return
-	var speed: float = dist / duration
-	var elapsed: float = 0.0
-	while elapsed < duration:
-		var step: float = min(get_physics_process_delta_time(), duration - elapsed)
-		await get_tree().create_timer(step).timeout
+	# Fixed integer frame count + lerp-to-target instead of accumulating a
+	# float "elapsed"/incrementally adding per-frame movement (2026-08-21 fix,
+	# take 3 -- same reasoning as _do_layer_jump(), see its comment). Fixing
+	# start/target up front and lerping by frame/total_frames means t reaches
+	# EXACTLY 1.0 on the real last iteration with no possible float drift, and
+	# a fixed target also avoids compounding rounding error from repeatedly
+	# adding dir*speed*step onto a moving global_position.
+	var start: Vector2 = global_position
+	var target: Vector2 = start + dir * dist
+	var total_frames: int = max(1, roundi(duration * Engine.physics_ticks_per_second))
+	for frame in range(1, total_frames + 1):
+		await get_tree().physics_frame
 		if not is_instance_valid(self):
 			return
-		elapsed += step
-		global_position += dir * speed * step
+		var t: float = float(frame) / float(total_frames)
+		global_position = start.lerp(target, t)
 
 func _do_venom_bite() -> void:
 	_color_rect.modulate = TINT_VENOM_BITE
@@ -565,19 +979,22 @@ func _do_venom_bite() -> void:
 		return
 	var lunge_dir: Vector2 = Vector2(direction, 0)
 	var lunge_time: float = venom_bite_lunge_time
-	var elapsed: float = 0.0
 	var hit_done := false
 	# VenomBiteZone (real Area2D+CollisionShape2D in broodspawner.tscn) is a
 	# child of her own body, so it moves with her automatically as
 	# global_position is updated each step of the lunge below; overlap is
 	# just checked fresh every step instead of hand-computed distance math.
-	while elapsed < lunge_time:
-		var step: float = min(get_physics_process_delta_time(), lunge_time - elapsed)
-		await get_tree().create_timer(step).timeout
+	# Fixed integer frame count + lerp-to-target (2026-08-21 fix, take 3 --
+	# same reasoning as _do_layer_jump()/_move_for(), see their comments).
+	var lunge_start: Vector2 = global_position
+	var lunge_target: Vector2 = lunge_start + lunge_dir * venom_bite_lunge_speed * lunge_time
+	var total_frames: int = max(1, roundi(lunge_time * Engine.physics_ticks_per_second))
+	for frame in range(1, total_frames + 1):
+		await get_tree().physics_frame
 		if not is_instance_valid(self):
 			return
-		elapsed += step
-		global_position += lunge_dir * venom_bite_lunge_speed * step
+		var t: float = float(frame) / float(total_frames)
+		global_position = lunge_start.lerp(lunge_target, t)
 		if not hit_done:
 			for body in _venom_bite_zone.get_overlapping_bodies():
 				if body.is_in_group("player"):
@@ -619,14 +1036,14 @@ func _do_leg_pierce() -> void:
 	# LegPierceZone itself doesn't move or rotate at all during windup
 	# anymore. Both the backward shift AND the raise happen together in the
 	# first half of the slam phase below instead.
-	var elapsed: float = 0.0
-	while elapsed < leg_pierce_windup:
-		var step: float = min(get_physics_process_delta_time(), leg_pierce_windup - elapsed)
-		await get_tree().create_timer(step).timeout
+	# Fixed integer frame count (2026-08-21 fix, take 3 -- same reasoning as
+	# _do_layer_jump()/_move_for(), see their comments).
+	var windup_total_frames: int = max(1, roundi(leg_pierce_windup * Engine.physics_ticks_per_second))
+	for windup_frame in range(1, windup_total_frames + 1):
+		await get_tree().physics_frame
 		if not is_instance_valid(self):
 			return
-		elapsed += step
-		var t: float = elapsed / leg_pierce_windup
+		var t: float = float(windup_frame) / float(windup_total_frames)
 		global_position = body_start.lerp(pullback_target, t)
 	if not is_instance_valid(self):
 		return
@@ -639,14 +1056,14 @@ func _do_leg_pierce() -> void:
 	# to rest_zone_position). Body advance (to forward_target) still
 	# animates smoothly across the whole duration. Damage only applies once
 	# fully back down, right at the very end — not for the whole motion.
-	elapsed = 0.0
-	while elapsed < leg_pierce_slam_time:
-		var step: float = min(get_physics_process_delta_time(), leg_pierce_slam_time - elapsed)
-		await get_tree().create_timer(step).timeout
+	# Fixed integer frame count (2026-08-21 fix, take 3 -- same reasoning as
+	# _do_layer_jump()/_move_for(), see their comments).
+	var slam_total_frames: int = max(1, roundi(leg_pierce_slam_time * Engine.physics_ticks_per_second))
+	for slam_frame in range(1, slam_total_frames + 1):
+		await get_tree().physics_frame
 		if not is_instance_valid(self):
 			return
-		elapsed += step
-		var t: float = elapsed / leg_pierce_slam_time
+		var t: float = float(slam_frame) / float(slam_total_frames)
 		if t < 0.5:
 			var raise_t: float = t / 0.5
 			_leg_pierce_zone.rotation = lerp(rest_rotation, swing_rotation, raise_t)
@@ -658,7 +1075,6 @@ func _do_leg_pierce() -> void:
 		global_position = pullback_target.lerp(forward_target, t)
 	_leg_pierce_zone.rotation = rest_rotation
 	_leg_pierce_zone.position = rest_zone_position
-	global_position = forward_target
 	# Camera shake on impact (2026-08-20, user request) — same
 	# elana.add_camera_trauma() convention elemental_golem.gd's own Ground
 	# Slam already uses.

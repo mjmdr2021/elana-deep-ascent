@@ -102,9 +102,11 @@ func _process(delta: float) -> void:
 		elana.on_slippery_tile = (hazard == "slippery") or overlay_slippery
 	# Broodspawner's arena floor — same custom-data convention as the other
 	# hazards, just read directly (no overlay layer needed, nothing paints
-	# "web" temporarily the way molten/slippery/electrified do).
+	# "webFloor" temporarily the way molten/slippery/electrified do).
+	# (2026-08-21: "web" split into "webFloor"/"webWall" custom-data tags —
+	# on_web_tile only cares about the floor variant.)
 	if "on_web_tile" in elana:
-		elana.on_web_tile = (hazard == "web")
+		elana.on_web_tile = (hazard == "webFloor")
 
 	# Standing in water while over a molten tile (e.g. water pooled above
 	# lava, or the sampled feet-position straddling both) douses it — same

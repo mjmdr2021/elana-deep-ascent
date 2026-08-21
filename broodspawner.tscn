@@ -3,18 +3,19 @@
 [ext_resource type="Script" uid="uid://cdmhoewdjnirh" path="res://broodspawner.gd" id="1_broodspawner"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_hurtbox"]
-size = Vector2(320, 232)
+size = Vector2(360, 232)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_venom_bite"]
 size = Vector2(174, 174)
 
 [node name="Broodspawner" type="CharacterBody2D" unique_id=1852240865]
 collision_layer = 0
-collision_mask = 16
+collision_mask = 0
 script = ExtResource("1_broodspawner")
 
 [node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="." unique_id=426223042]
-polygon = PackedVector2Array(-160, -116, 160, -116, 160, 116, -160, 116)
+position = Vector2(0, -112)
+polygon = PackedVector2Array(-96, 48, 128, 48, 128, 112, -96, 112)
 
 [node name="Polygon2D" type="Polygon2D" parent="CollisionPolygon2D" unique_id=864521613]
 color = Color(0.4, 0.5, 0.18, 1)
@@ -40,13 +41,16 @@ color = Color(0.5440038, 0.17729363, 0.99999994, 1)
 polygon = PackedVector2Array(16.669968, -30.245678, -40, 88, -64, 88, 11.681229, -55.235447, 54.981155, -17.085161, 66.62738, 25.003597, 3.284936, 130.20474, 56.6324, 23.686163, 43.31743, -10.511818)
 
 [node name="Hurtbox" type="Area2D" parent="." unique_id=2080566606]
+position = Vector2(0, -116)
 collision_layer = 4
 collision_mask = 0
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox" unique_id=2036186234]
+position = Vector2(12, 0)
 shape = SubResource("RectangleShape2D_hurtbox")
 
 [node name="VenomBiteZone" type="Area2D" parent="." unique_id=12782065]
+position = Vector2(-40, -116)
 collision_layer = 0
 collision_mask = 2
 
@@ -68,9 +72,10 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 color = Color(0.6, 0.9, 0.4, 0.35)
+metadata/_edit_use_anchors_ = true
 
 [node name="LegPierceZone" type="Area2D" parent="." unique_id=890382939]
-position = Vector2(104, 0)
+position = Vector2(104, -116)
 collision_layer = 0
 collision_mask = 2
 
@@ -84,31 +89,31 @@ position = Vector2(175, -40)
 polygon = PackedVector2Array(-71, -56, 17, 40, 57, 160, -7, 160, -151, 160, -23, 48, -63, -8, -167, 128, -199, 128)
 
 [node name="WebAnchorPoint1a" type="Marker2D" parent="." unique_id=628249991]
-position = Vector2(-520, 256)
+position = Vector2(-520, 140)
 
 [node name="WebAnchorPoint1b" type="Marker2D" parent="." unique_id=1967089465]
-position = Vector2(-152, 80)
+position = Vector2(-152, -36)
 
 [node name="WebAnchorPoint2a" type="Marker2D" parent="." unique_id=233943567]
-position = Vector2(-152, 8)
+position = Vector2(-152, -108)
 
 [node name="WebAnchorPoint2b" type="Marker2D" parent="." unique_id=365793710]
-position = Vector2(-520, 104)
+position = Vector2(-520, -12)
 
 [node name="WebAnchorPoint3a" type="Marker2D" parent="." unique_id=1830537932]
-position = Vector2(-88, 120)
+position = Vector2(-88, 4)
 
 [node name="WebAnchorPoint3b" type="Marker2D" parent="." unique_id=25928283]
-position = Vector2(-208, 400)
+position = Vector2(-208, 284)
 
 [node name="WebAnchorPoint4a" type="Marker2D" parent="." unique_id=1418524525]
-position = Vector2(104, 120)
+position = Vector2(104, 4)
 
 [node name="WebAnchorPoint4b" type="Marker2D" parent="." unique_id=897689274]
-position = Vector2(216, 400)
+position = Vector2(216, 284)
 
 [node name="HPBar" type="Node2D" parent="." unique_id=780762332]
-position = Vector2(-60, -146)
+position = Vector2(-60, -262)
 
 [node name="Background" type="ColorRect" parent="HPBar" unique_id=1938940634]
 offset_right = 120.0
