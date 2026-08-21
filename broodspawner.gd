@@ -313,8 +313,8 @@ var _is_going_up: bool = false
 # Captured once in _ready() — where she returns to when going back UP,
 # since chasing (DOWN phase) moves her away from her placed position.
 var _origin_position: Vector2 = Vector2.ZERO
-# 2026-08-21 additions — see _apply_horizontal_movement()/_do_layer_jump()
-# below. Resolved once in _ready() from platform_layer_paths.
+# 2026-08-21 additions — see _apply_horizontal_movement()/_do_ascend_jump()/
+# _do_descend_jump() below. Resolved once in _ready() from platform_layer_paths.
 var _platform_layers: Array[Node] = []
 # Guards against re-entry the same way _is_using_attack/_is_going_up do —
 # also disables gravity/move_and_slide() for the duration (see
@@ -368,7 +368,7 @@ var _is_on_real_floor: bool = false
 # Same source/pattern base_enemy.gd and elana.gd both use (project default,
 # not a made-up value) — var, not const, since ProjectSettings.get_setting()
 # is a method call and can't be a constant expression.
-var gravity = ProjectSettings.get_setting("physics/2d/default_gravity")
+var gravity: float = ProjectSettings.get_setting("physics/2d/default_gravity")
 
 @onready var _hp_bg: ColorRect = $HPBar/Background
 @onready var _hp_fill: ColorRect = $HPBar/Fill
@@ -936,6 +936,16 @@ func _start_random_down_attack() -> void:
 		_is_using_attack = false
 		_post_attack_pause_timer = down_post_attack_pause
 
+# Fixed integer frame count for a scripted move/animation loop lasting
+# duration seconds (2026-08-22 cleanup — pulled out of _move_for(), the
+# Venom Bite lunge, and Leg Pierce windup/slam, which all repeated this same
+# formula inline). max(1, ...) guards against a zero/negative duration ever
+# producing a zero-iteration loop. See _move_for()'s own comment for why a
+# fixed frame count + lerp-to-target (rather than accumulating a float
+# "elapsed") avoids the duplicate-final-frame float-drift bug this fixed.
+func _frame_count_for(duration: float) -> int:
+	return max(1, roundi(duration * Engine.physics_ticks_per_second))
+
 # Shared chunked-movement helper (2026-08-20) — moves this node dist units
 # in dir over duration seconds, awaiting in small steps (same technique the
 # venom bite lunge already used before this). Used for both attacks' shared
@@ -950,14 +960,15 @@ func _move_for(dir: Vector2, dist: float, duration: float) -> void:
 		return
 	# Fixed integer frame count + lerp-to-target instead of accumulating a
 	# float "elapsed"/incrementally adding per-frame movement (2026-08-21 fix,
-	# take 3 -- same reasoning as _do_layer_jump(), see its comment). Fixing
+	# take 3 -- same fix applied to every scripted move loop in this file,
+	# see the Venom Bite lunge/Leg Pierce windup/slam below). Fixing
 	# start/target up front and lerping by frame/total_frames means t reaches
 	# EXACTLY 1.0 on the real last iteration with no possible float drift, and
 	# a fixed target also avoids compounding rounding error from repeatedly
 	# adding dir*speed*step onto a moving global_position.
 	var start: Vector2 = global_position
 	var target: Vector2 = start + dir * dist
-	var total_frames: int = max(1, roundi(duration * Engine.physics_ticks_per_second))
+	var total_frames: int = _frame_count_for(duration)
 	for frame in range(1, total_frames + 1):
 		await get_tree().physics_frame
 		if not is_instance_valid(self):
@@ -985,10 +996,10 @@ func _do_venom_bite() -> void:
 	# global_position is updated each step of the lunge below; overlap is
 	# just checked fresh every step instead of hand-computed distance math.
 	# Fixed integer frame count + lerp-to-target (2026-08-21 fix, take 3 --
-	# same reasoning as _do_layer_jump()/_move_for(), see their comments).
+	# same reasoning as _move_for(), see its comment).
 	var lunge_start: Vector2 = global_position
 	var lunge_target: Vector2 = lunge_start + lunge_dir * venom_bite_lunge_speed * lunge_time
-	var total_frames: int = max(1, roundi(lunge_time * Engine.physics_ticks_per_second))
+	var total_frames: int = _frame_count_for(lunge_time)
 	for frame in range(1, total_frames + 1):
 		await get_tree().physics_frame
 		if not is_instance_valid(self):
@@ -1037,8 +1048,8 @@ func _do_leg_pierce() -> void:
 	# anymore. Both the backward shift AND the raise happen together in the
 	# first half of the slam phase below instead.
 	# Fixed integer frame count (2026-08-21 fix, take 3 -- same reasoning as
-	# _do_layer_jump()/_move_for(), see their comments).
-	var windup_total_frames: int = max(1, roundi(leg_pierce_windup * Engine.physics_ticks_per_second))
+	# _move_for(), see its comment).
+	var windup_total_frames: int = _frame_count_for(leg_pierce_windup)
 	for windup_frame in range(1, windup_total_frames + 1):
 		await get_tree().physics_frame
 		if not is_instance_valid(self):
@@ -1057,8 +1068,8 @@ func _do_leg_pierce() -> void:
 	# animates smoothly across the whole duration. Damage only applies once
 	# fully back down, right at the very end — not for the whole motion.
 	# Fixed integer frame count (2026-08-21 fix, take 3 -- same reasoning as
-	# _do_layer_jump()/_move_for(), see their comments).
-	var slam_total_frames: int = max(1, roundi(leg_pierce_slam_time * Engine.physics_ticks_per_second))
+	# _move_for(), see its comment).
+	var slam_total_frames: int = _frame_count_for(leg_pierce_slam_time)
 	for slam_frame in range(1, slam_total_frames + 1):
 		await get_tree().physics_frame
 		if not is_instance_valid(self):
