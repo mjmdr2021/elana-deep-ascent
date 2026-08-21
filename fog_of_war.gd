@@ -208,13 +208,13 @@ func _physics_process(delta: float) -> void:
 	# not to either character's position directly.
 	var glint := elana.get_node_or_null("Glint")
 	if glint != null:
-		# Scouting gets a bigger erase radius than normal, scaled by the
-		# Luminosity+ skill's level (GameData.scout_fog_erase_bonus) —
-		# doesn't touch Elana's own erase or Glint's normal attached-mode
-		# radius, both still use the plain brush_radius above.
-		var glint_radius: float = brush_radius
-		if GameData.glint_scouting:
-			glint_radius += GameData.scout_fog_erase_bonus
+		# Luminosity+'s fog-erase bonus (GameData.scout_fog_erase_bonus) now
+		# applies to Glint's own erase radius always, not just while
+		# scouting (2026-08-20 — was gated behind GameData.glint_scouting,
+		# so the skill did nothing for her normal attached-follow light).
+		# Still doesn't touch Elana's own erase radius, which stays plain
+		# brush_radius regardless.
+		var glint_radius: float = brush_radius + GameData.scout_fog_erase_bonus
 		_erase_at(glint.global_position, glint_radius)
 	if not _mask_dirty:
 		return

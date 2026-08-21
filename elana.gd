@@ -69,6 +69,19 @@ var poison_ticks_remaining: int = 0
 var poison_tick_timer: float = 0.0
 var on_slippery_tile: bool = false
 const SLIPPERY_ACCEL: float = 120.0
+# Broodspawner's web-floor mechanic — set externally by terrain_hazards.gd,
+# same pattern as on_slippery_tile above. Standing still on it builds a
+# wrap meter that slows her (capped at 50% speed reduction even at full
+# wrap) and, past half wrap, also locks out jump/dodge-roll entirely. Any
+# movement (walk or jump) or a charged attack of any weapon resets it to 0
+# instantly — see _tick_web_wrap().
+var on_web_tile: bool = false
+var web_wrap: float = 0.0  # 0.0 (free) .. 1.0 (fully wrapped)
+var _web_still_timer: float = 0.0
+const WEB_STILL_THRESHOLD: float = 5.0  # seconds standing still before wrap starts building
+const WEB_WRAP_RAMP_TIME: float = 6.0  # seconds from 0 to full wrap once it starts
+const WEB_WRAP_LOCK_THRESHOLD: float = 0.5  # wrap fraction past which jump/dodge lock out
+const WEB_WRAP_MAX_SLOW: float = 0.5  # speed floor at full wrap (1.0 - this)
 var dodge_timer = 0.0
 var dodge_cooldown = 0.0
 var is_air_dashing = false
@@ -698,7 +711,22 @@ func stop_story_glow() -> void:
 	if _sprite_effects_material != null:
 		_sprite_effects_material.set_shader_parameter("glow_outline_alpha", 0.0)
 
+# Standing still (on floor, near-zero horizontal velocity) while on_web_tile
+# is what "standing still" means here — this one check naturally covers
+# both stated ways to break free (walking moves velocity.x off zero,
+# jumping leaves is_on_floor()), no separate input-polling needed.
+func _tick_web_wrap(delta: float) -> void:
+	var standing_still: bool = on_web_tile and is_on_floor() and abs(velocity.x) < 1.0
+	if standing_still:
+		_web_still_timer += delta
+		if _web_still_timer >= WEB_STILL_THRESHOLD:
+			web_wrap = min(1.0, web_wrap + delta / WEB_WRAP_RAMP_TIME)
+	else:
+		_web_still_timer = 0.0
+		web_wrap = 0.0
+
 func _tick_status_effects(delta: float) -> void:
+	_tick_web_wrap(delta)
 	_update_status_tint()
 	if _story_glow_active:
 		_story_glow_elapsed += delta
@@ -993,7 +1021,7 @@ func _physics_process(delta):
 		return
 
 	# Ground dodge — Shift
-	if is_on_floor() and not _in_water and GameData.dodge_enabled and dodge_cooldown <= 0 and Input.is_action_just_pressed("sprint"):
+	if is_on_floor() and not _in_water and GameData.dodge_enabled and dodge_cooldown <= 0 and web_wrap < WEB_WRAP_LOCK_THRESHOLD and Input.is_action_just_pressed("sprint"):
 		var key_dir = Input.get_axis("move_left", "move_right")
 		_dash_dir = int(sign(key_dir)) if key_dir != 0.0 else facing
 		is_dodging = true
@@ -1140,7 +1168,7 @@ func _physics_process(delta):
 	else:
 		is_wall_sliding = false
 
-	if jump_buffer_timer > 0.0 and not is_stunned:
+	if jump_buffer_timer > 0.0 and not is_stunned and web_wrap < WEB_WRAP_LOCK_THRESHOLD:
 		if is_on_floor() and not is_dodging and not _in_water:
 			velocity.y = JUMP_VELOCITY * GameData.jump_mult * jump_weight_factor
 			can_double_jump = true
@@ -1169,7 +1197,12 @@ func _physics_process(delta):
 			jump_buffer_timer = 0.0
 
 	if not _wall_jump_input_locked and not is_wall_sliding:
-		var speed = MOVE_SPEED * (1.0 + (GameData.move_speed_herb_bonus + GameData.agility_herb_speed_bonus) / 100.0) * slow_factor
+		# web_wrap scales 0..1 into a speed multiplier of 1.0..(1.0 -
+		# WEB_WRAP_MAX_SLOW) — caps at 50% slow even at full wrap, separate
+		# from the generic slow_factor system (apply_slow()) since this has
+		# its own reset/lock rules.
+		var web_slow: float = 1.0 - web_wrap * WEB_WRAP_MAX_SLOW
+		var speed = MOVE_SPEED * (1.0 + (GameData.move_speed_herb_bonus + GameData.agility_herb_speed_bonus) / 100.0) * slow_factor * web_slow
 		if direction != 0 and sign(direction) != facing:
 			speed *= 0.7
 		if on_slippery_tile:
@@ -1632,6 +1665,11 @@ func heavy_attack() -> void:
 	is_attacking = true
 	is_heavy_attack = true
 	_hit_this_swing.clear()
+	# Broodspawner's web wrap — a charged attack of any weapon breaks free
+	# instantly, on top of the normal walk/jump escape (useful once wrap
+	# has already locked out jump/dodge, since attacking is still allowed).
+	web_wrap = 0.0
+	_web_still_timer = 0.0
 	match GameData.current_weapon:
 		"fist":       await _heavy_fist()
 		"sword":      await _heavy_sword()

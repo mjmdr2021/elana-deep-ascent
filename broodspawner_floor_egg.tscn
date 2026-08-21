@@ -1,0 +1,30 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://broodspawner_floor_egg.gd" id="1_floategg"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_flooregg_hurt"]
+size = Vector2(44, 44)
+
+[node name="BroodspawnerFloorEgg" type="Area2D"]
+script = ExtResource("1_floategg")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -20.0
+offset_right = 20.0
+offset_bottom = 20.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.7, 0.6, 0.4, 1)
+
+[node name="Hurtbox" type="Area2D" parent="."]
+collision_layer = 4
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
+shape = SubResource("RectangleShape2D_flooregg_hurt")

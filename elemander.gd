@@ -351,6 +351,13 @@ const FROST_BEAM_GLOW_ENERGY: float = 2.5  # faint, well under the electric bolt
 var _fire_dash_hit_this_pass: bool = false
 
 func _ready() -> void:
+	# Same is_removed()/mark_removed() persistence pair every other boss
+	# uses (Hollowfang, Ant Queen, Elemental Golem, Broodspawner) — missing
+	# here until now, so killing him and reloading/re-entering the scene
+	# silently respawned him fully alive every time.
+	if GameData.is_removed(get_tree().current_scene.scene_file_path, name):
+		queue_free()
+		return
 	hp = max_hp
 	add_to_group("enemies")
 	add_to_group("bosses")
@@ -1416,8 +1423,15 @@ func _apply_damage(damage: int) -> void:
 
 # Death sequence (motes/blessing/checkpoint, matching Hollowfang's own
 # eventual reveal) is still open — same as Hollowfang's is per the bosses
-# backlog. Just clears out for now.
+# backlog. Persistence + reward wiring below is NOT part of that open item
+# though — mark_removed()/gain_xp()/reset_boss_camera() were simply missing
+# outright (2026-08-20 fix): killing him never paid xp_reward, never
+# persisted the kill (is_removed() guard added in _ready() above), and left
+# the boss camera lock stuck on permanently.
 func _die() -> void:
+	GameData.mark_removed(get_tree().current_scene.scene_file_path, name)
+	GameData.gain_xp(xp_reward)
+	GameData.reset_boss_camera()
 	queue_free()
 
 # Standard on_hit/on_elemental_hit interface, same shape hit_handler.gd's is

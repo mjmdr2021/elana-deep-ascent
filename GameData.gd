@@ -110,7 +110,7 @@ const SKILL_TREE_DATA: Dictionary = {
 	"agility_herb_speed":        { "name": "Agility Herb+",       "type": "stat",    "path": 2, "max_level": 3, "prereq": "agility",          "desc": "+10% move speed (Agility Herb)" },
 	"attack_speed_node":  { "name": "Attack Speed",       "type": "stat",    "path": 2, "max_level": 3, "prereq": "agility_herb_speed",      "desc": "+10% atk speed (Agility Herb)" },
 	"flash_stun_skill":   { "name": "★ Flash Stun",      "type": "skill",   "path": 2, "max_level": 1, "prereq": "attack_speed_node","desc": "Stun all enemies 3s (Agility Herb)" },
-	"luminosity_plus":    { "name": "Luminosity+",        "type": "passive",  "path": 2, "max_level": 3, "prereq": "agility_herb_speed",      "desc": "+1 glow radius tier/lvl; +fog reveal size while scouting/lvl" },
+	"luminosity_plus":    { "name": "Luminosity+",        "type": "passive",  "path": 2, "max_level": 3, "prereq": "agility_herb_speed",      "desc": "+1 glow radius tier/lvl; +fog reveal size/lvl" },
 	"scouting_distance":  { "name": "Scouting Distance",  "type": "stat",    "path": 2, "max_level": 3, "prereq": "luminosity_plus",  "desc": "+140 scout leash distance/lvl" },
 	"phantom_blur":       { "name": "Phantom Blur",       "type": "stat",    "path": 2, "max_level": 3, "prereq": "agility_herb_speed",      "desc": "+8% dodge chance/lvl" },
 	"double_jump_skill":  { "name": "★ Double Jump",     "type": "skill",   "path": 2, "max_level": 1, "prereq": "phantom_blur",     "desc": "Unlock double jump" },
@@ -269,9 +269,10 @@ var glint_luminosity_bonus: float = 0.0
 # Scouting Distance (child of Luminosity+) — added to glint.gd's scout
 # leash radius, world px/lvl.
 var scout_leash_radius_bonus: float = 0.0
-# Luminosity+ itself also grows fog_of_war.gd's erase radius specifically
-# while Glint is scouting (see fog_of_war.gd's _physics_process()) — world
-# px/lvl, on top of its own existing glow-radius/brightness effect.
+# Luminosity+ itself also grows Glint's own fog_of_war.gd erase radius,
+# always — not just while scouting (see fog_of_war.gd's _physics_process(),
+# fixed 2026-08-20) — world px/lvl, on top of its own existing glow-radius/
+# brightness effect.
 var scout_fog_erase_bonus: float = 0.0
 var power_potency_bonus: float = 0.0
 var last_stand_heal_pct: float = 0.0

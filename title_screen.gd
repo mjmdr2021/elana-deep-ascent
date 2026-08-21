@@ -17,6 +17,7 @@ func _ready():
 	_build_title(bg)
 	_build_buttons(bg)
 	_build_settings(layer)
+	_build_test_zone_button(bg)
 
 func _build_title(parent: Control) -> void:
 	var area = CenterContainer.new()
@@ -152,6 +153,31 @@ func _build_settings(layer: CanvasLayer) -> void:
 
 func _make_button(label: String) -> Button:
 	return GameData.make_styled_button(label, Vector2(220, 46), 16)
+
+# Dev shortcut — off to the side of the real menu stack, deliberately
+# smaller/muted so it doesn't read as an actual game option. Warps straight
+# into light_test.tscn for quick iteration without a real save/New Game.
+func _build_test_zone_button(parent: Control) -> void:
+	var btn = GameData.make_styled_button("Load Test Zone", Vector2(160, 32), 12)
+	btn.anchor_left = 0.0
+	btn.anchor_top = 1.0
+	btn.anchor_right = 0.0
+	btn.anchor_bottom = 1.0
+	btn.offset_left = 24
+	btn.offset_top = -56
+	btn.offset_right = 184
+	btn.offset_bottom = -24
+	btn.modulate = Color(1.0, 1.0, 1.0, 0.6)
+	btn.pressed.connect(_on_load_test_zone)
+	parent.add_child(btn)
+
+func _on_load_test_zone() -> void:
+	# Bypasses the normal received_stone_being_power gate — this is a dev
+	# warp, not real progression, so the HUD should just be usable.
+	HUD.set_hud_visible(true)
+	# Same threaded hand-off as New Game/Continue — see their comments above.
+	GameData.pending_scene_load = "res://light_test.tscn"
+	get_tree().change_scene_to_file("res://loading_screen.tscn")
 
 func _on_new_game() -> void:
 	GameData.reset()
