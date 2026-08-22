@@ -17,6 +17,15 @@ uniform float flash_amount : hint_range(0.0, 1.0) = 0.0;
 uniform vec4 glow_outline_color : source_color = vec4(1.0, 0.85, 0.3, 1.0);
 uniform float glow_outline_alpha : hint_range(0.0, 1.0) = 0.0;
 
+// Web wrap — rising translucent white coating as Broodspawner's web tiles
+// wrap her up (elana.gd's web_wrap, 0.0 free .. 1.0 fully wrapped), driven
+// every frame from _tick_web_wrap(). Fills from the bottom of the sprite
+// upward (UV.y increases downward in Godot's canvas-item space, so "covered"
+// means UV.y is past a falling threshold as web_wrap climbs), feathered
+// instead of a hard line for a softer "creeping" look.
+uniform vec4 web_wrap_color : source_color = vec4(1.0, 1.0, 1.0, 0.7);
+uniform float web_wrap_amount : hint_range(0.0, 1.0) = 0.0;
+
 void fragment() {
 	// COLOR, not a fresh texture(TEXTURE, UV) sample — Godot pre-populates
 	// COLOR with texture(TEXTURE, UV) * modulate before fragment() runs, so
@@ -52,6 +61,12 @@ void fragment() {
 
 	if (flash_amount > 0.0 && col.a > 0.0) {
 		col.rgb = mix(col.rgb, flash_color.rgb, flash_amount);
+	}
+
+	if (web_wrap_amount > 0.0 && col.a > 0.0) {
+		float threshold = 1.0 - web_wrap_amount;
+		float coverage = smoothstep(threshold - 0.08, threshold + 0.08, UV.y);
+		col.rgb = mix(col.rgb, web_wrap_color.rgb, coverage * web_wrap_color.a);
 	}
 
 	COLOR = col;

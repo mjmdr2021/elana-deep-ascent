@@ -1227,8 +1227,9 @@ shadow_enabled = true
 texture = SubResource("GradientTexture2D_axwxe")
 texture_scale = 3.5
 
-[node name="Boss1HoleEntranceCutscene" parent="Boss 2" unique_id=1121268404 instance=ExtResource("45_aiqx0")]
+[node name="Boss2HoleEntranceCutscene" parent="Boss 2" unique_id=1121268404 instance=ExtResource("45_aiqx0")]
 position = Vector2(-320, 784)
+cutscene_type = 4
 
 [node name="DialogMarker" parent="." unique_id=319393806 instance=ExtResource("5_c1mfx")]
 position = Vector2(-504, -1376)

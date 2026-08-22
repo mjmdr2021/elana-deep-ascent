@@ -14,9 +14,12 @@ extends CharacterBody2D
 #     Vulnerable web anchors are up during this phase; destroying all of
 #     them forces her DOWN.
 #   DOWN — grounded, actively attacks (Venom Bite/Leg Pierce/Poison Spit,
-#     randomly picked), no eggs/anchors. Auto-returns UP after a fixed
-#     duration, knocking everything back around her on the way up. Fresh
-#     anchors spawn again once back UP, so the cycle repeats.
+#     range-gated by their own trigger zones and randomly picked among
+#     whichever's in range; Web Pull has no zone of its own, instead an
+#     escalating-chance proc — see "Web Pull" export group), no eggs/
+#     anchors. Auto-returns UP after a fixed duration, knocking everything
+#     back around her on the way up. Fresh anchors spawn again once back UP,
+#     so the cycle repeats.
 #
 # Physically confined to web ground, per-layer, PURELY by hazard label
 # (2026-08-20, reworked 2026-08-21 into per-layer physics bits, reworked
@@ -137,9 +140,18 @@ var direction: int = 1
 # _do_floor_eggs()) — this is only the fallback if that node's ever missing.
 @export var floor_egg_spacing: float = 60.0
 
+@export_group("UP - Regen")
+# Regenerates while UP (2026-08-22, user request: "when returning to UP
+# state, have spider regen for 1% max hp per second"), ticked in _tick_up()
+# so it naturally only starts once she's actually finished the DOWN->UP
+# transition -- _tick_up() isn't called at all until _is_down flips false at
+# the very end of _go_up()'s windup. Clamped to max_hp, doesn't apply while
+# DOWN (getting shot back down to 0 would defeat the point of taking her
+# down in the first place).
+@export var up_regen_percent_per_second: float = 1.0
+
 @export_group("DOWN")
 @export var down_duration: float = 150.0
-@export var down_attack_gap: float = 2.5
 @export var down_to_up_knockback: float = 300.0
 @export var down_to_up_knockback_radius: float = 232.0
 @export var down_to_up_windup: float = 1.0
@@ -147,11 +159,23 @@ var direction: int = 1
 @export var down_landing_stun: float = 2.0
 @export var down_landing_knockback: float = 300.0
 @export var down_landing_knockback_radius: float = 232.0
-@export var down_chase_speed: float = 90.0
+# 2026-08-22, user request: "make chase speed faster" -- was 90 (itself
+# already bumped from 50 earlier this session).
+@export var down_chase_speed: float = 130.0
 # Stops closing the gap once within this horizontal distance (2026-08-20,
 # user request — no need to walk until their bodies are centered on top of
 # each other, just close enough to stay in attack range).
 @export var down_chase_stop_distance: float = 260.0
+# Alternate stand-off distance, used whenever Elana's currently inside
+# Poison Spit's zone (2026-08-22, latest design: "remove chase in chance
+# pool. always chase. if in poison spit zone, prioritize spit over chase" --
+# REPLACES the earlier rolled chase_mode entirely, see
+# _try_start_zone_attack()'s comment for the full history). Checked live
+# every frame now, not rolled at a checkpoint -- no state var needed at all,
+# just whichever distance matches Elana's CURRENT zone occupancy this frame.
+# Comfortably inside PoisonSpitTriggerZone's real span (320-968px as
+# currently sized).
+@export var down_chase_ranged_stop_distance: float = 500.0
 # Holds still for this long after any attack finishes before chasing
 # resumes (2026-08-20, user request) — without it, chase logic re-engages
 # the instant _is_using_attack clears, reading as the lunge continuing
@@ -212,10 +236,25 @@ var direction: int = 1
 # full uninterrupted window. Stops her flickering/re-triggering off Elana
 # briefly crossing layers. See _pending_jump_target_layer/_pending_jump_timer
 # and _apply_horizontal_movement().
-@export var layer_jump_detection_delay: float = 2.0
+@export var layer_jump_detection_delay: float = 1.5
+
+@export_group("Layer Landing Impact")
+# Fires on EVERY layer landing during DOWN, both ascend and descend
+# (2026-08-22, user request: "when spider switches layer and lands, it
+# knocks back and do damage to Elana on the landing area") -- see
+# _apply_layer_landing_impact(), called from _tick_layer_transition() the
+# instant a real landing is detected. Deliberately does NOT also fire on the
+# very first UP->DOWN drop (_go_down()'s own _do_descend_jump(0) call) --
+# that transition already has its own dedicated, heavier landing reaction
+# (down_landing_stun/down_landing_knockback below), and firing both back to
+# back would double-hit Elana on that one specific transition. See
+# _suppress_next_landing_impact.
+@export var layer_landing_knockback: float = 300.0
+@export var layer_landing_knockback_radius: float = 232.0
+@export var layer_landing_damage: int = 14
 
 @export_group("Venom Bite")
-@export var venom_bite_enabled: bool = false
+@export var venom_bite_enabled: bool = true
 # Windup is now pullback + a brief motionless hold before the lunge fires
 # (2026-08-20, user request).
 @export var venom_bite_windup: float = 0.2
@@ -234,7 +273,6 @@ var direction: int = 1
 @export var venom_bite_stun: float = 0.5
 
 @export_group("Leg Pierce")
-# Disabled 2026-08-20, user request — only Venom Bite for now.
 @export var leg_pierce_enabled: bool = true
 @export var leg_pierce_windup: float = 0.3
 @export var leg_pierce_windup_pullback: float = 10.0
@@ -260,11 +298,53 @@ var direction: int = 1
 @export var leg_pierce_knockup: float = 320.0
 
 @export_group("Poison Spit")
-# Disabled 2026-08-20, user request — only Venom Bite for now.
-@export var poison_spit_enabled: bool = false
+# All 3 original attacks enabled (2026-08-22, user request, all through
+# their own trigger zones now) -- venom_bite_enabled/poison_spit_enabled had
+# been left false despite their own now-removed comments both saying "only
+# Venom Bite for now," while leg_pierce_enabled was true -- backwards from
+# that stated intent, an actual bug, not current design.
+@export var poison_spit_enabled: bool = true
 @export var poison_spit_windup: float = 0.7
-@export var poison_spit_count: int = 4
+@export var poison_spit_count: int = 6
 @export var poison_spit_spread_deg: float = 40.0
+# 2026-08-22, user request: "make the poison spit to have a cooldown. when
+# on cooldown, not a priority. give 5 seconds cooldown." -- see
+# _poison_spit_cooldown_timer, ticked directly in _physics_process() (NOT
+# _tick_down(), which freezes whenever _is_using_attack is true -- this
+# needs to keep counting down in real time even while she's mid-Venom-Bite/
+# Leg-Pierce/Web-Pull), set the moment Poison Spit is chosen (not when it
+# finishes) in _try_start_zone_attack(). While
+# on cooldown it drops out of the priority chain entirely -- both the
+# attack-selection priority (_try_start_zone_attack()) and the
+# stand-off-distance priority (_apply_horizontal_movement()) fall back to
+# normal melee chase instead, same as if Poison Spit were disabled.
+@export var poison_spit_cooldown: float = 5.0
+
+@export_group("Web Pull")
+# No trigger zone (2026-08-22, user request: "create another attack, web
+# pull, no trigger zone") -- range doesn't gate it at all. Went through two
+# earlier designs this same session (an escalating-chance proc, then a flat
+# percentage folded into a 3-way roll with chase/spit) before landing on
+# this final one, user's own exact spec: "for web pull. remove the chance
+# too. have it do the pull every 5 attacks, any attack. except for spit
+# spawn when on state up." Deterministic now -- every
+# web_pull_attack_interval-th DOWN-phase attack (Venom Bite/Leg Pierce/
+# Poison Spit, tracked by _attacks_since_web_pull in _try_start_zone_attack())
+# becomes a Web Pull instead, resetting the counter. UP-phase egg-spitting
+# (_do_spit()) was never counted in the first place -- that counter only
+# ever increments inside _try_start_zone_attack(), which only ever runs
+# during DOWN -- so the "except spit spawn on state up" exclusion needed no
+# actual code, it's true by construction.
+@export var web_pull_enabled: bool = true
+@export var web_pull_attack_interval: int = 5
+# Web spits toward Elana, stunning her, held for this long before the pull
+# starts (2026-08-22, user's own spec: "a line connecting to elana that
+# stuns her, then after a second it pulls elana"). See _do_web_pull().
+@export var web_pull_windup: float = 1.0
+# How long the drag toward VenomBiteTriggerZone takes once it starts --
+# elana.gd's own apply_drag_stun() keeps her stunned for this entire drag
+# too (user: "stunned through the whole pull"), not just the windup above.
+@export var web_pull_drag_duration: float = 0.6
 
 const SPIT_EGG_SCENE = preload("res://broodspawner_spit_egg.tscn")
 const FLOOR_EGG_SCENE = preload("res://broodspawner_floor_egg.tscn")
@@ -284,6 +364,7 @@ const TINT_DOWN: Color = Color(0.85, 0.6, 0.75, 1.0)
 const TINT_VENOM_BITE: Color = Color(0.6, 0.9, 0.4, 1.0)
 const TINT_LEG_PIERCE: Color = Color(0.8, 0.4, 0.3, 1.0)
 const TINT_POISON_SPIT: Color = Color(0.5, 0.8, 0.3, 1.0)
+const TINT_WEB_PULL: Color = Color(0.85, 0.85, 0.9, 1.0)
 
 var hp: float
 # Gated behind ArenaBox (see _ready()'s body_entered hookup below) — she
@@ -295,15 +376,30 @@ var _spit_timer: float = 0.0
 var _floor_egg_timer: float = 0.0
 var _is_down: bool = false
 var _down_timer: float = 0.0
-var _down_attack_cooldown: float = 0.0
 var _is_using_attack: bool = false
 var _anchors_remaining: int = 0
 # 2026-08-20 additions — see _go_down()/_tick_down()/_go_up() below.
 var _down_stun_timer: float = 0.0
 # Set to down_post_attack_pause whenever an attack finishes (see
-# _start_random_down_attack()) — ticked/consumed in
-# _apply_horizontal_movement() below.
+# _try_start_zone_attack()) — ticked/consumed in
+# _apply_horizontal_movement() below, and also gates _tick_down() from
+# trying to start another attack until it elapses (2026-08-22 — this is now
+# the only gap between attacks at all, since the old down_attack_gap/
+# _down_attack_cooldown timer was removed in favor of trigger zones).
 var _post_attack_pause_timer: float = 0.0
+# How many DOWN-phase attacks (Venom Bite/Leg Pierce/Poison Spit) have
+# fired since the last Web Pull (2026-08-22, see "Web Pull" export group and
+# _try_start_zone_attack()) -- once it reaches web_pull_attack_interval, the
+# next attack slot is Web Pull instead, and this resets to 0. Only ever
+# incremented/read inside _try_start_zone_attack(), which only runs during
+# DOWN, so UP-phase egg-spitting never touches it.
+var _attacks_since_web_pull: int = 0
+# Poison Spit's cooldown (2026-08-22, see poison_spit_cooldown's own
+# comment) -- set to poison_spit_cooldown the moment it's chosen in
+# _try_start_zone_attack(), ticked down in _tick_down(). While > 0, Poison
+# Spit drops out of both priority checks (_try_start_zone_attack()'s attack
+# selection and _apply_horizontal_movement()'s stand-off distance).
+var _poison_spit_cooldown_timer: float = 0.0
 # Guards _go_up() against re-entry: _tick_down() keeps calling it every
 # frame once _down_timer <= 0, and _is_down only flips false at the very
 # END of _go_up()'s own 1s windup await — without this, dozens of parallel
@@ -365,6 +461,13 @@ var _pending_jump_timer: float = 0.0
 # _current_floor_layer's expected string -- read by _tick_layer_transition()
 # in place of is_on_floor().
 var _is_on_real_floor: bool = false
+# Set true right before _go_down()'s initial _do_descend_jump(0) call, read
+# and cleared by _tick_layer_transition() the instant that landing resolves
+# (2026-08-22, see "Layer Landing Impact" export group) -- skips the new
+# per-landing knockback+damage exactly once, for that one specific
+# transition, since it already gets its own separate landing reaction
+# (down_landing_stun/down_landing_knockback in _go_down() itself).
+var _suppress_next_landing_impact: bool = false
 # Same source/pattern base_enemy.gd and elana.gd both use (project default,
 # not a made-up value) — var, not const, since ProjectSettings.get_setting()
 # is a method call and can't be a constant expression.
@@ -381,6 +484,23 @@ var gravity: float = ProjectSettings.get_setting("physics/2d/default_gravity")
 @onready var _body_shape: CollisionPolygon2D = $CollisionPolygon2D
 @onready var _venom_bite_zone: Area2D = $VenomBiteZone
 @onready var _leg_pierce_zone: Area2D = $LegPierceZone
+# Trigger zones (2026-08-22, user request: "add a triggerzone for the
+# attacks instead" — replaces the old down_attack_gap timer entirely, see
+# _try_start_zone_attack()) — separate from the hit-detection zones above,
+# these decide WHETHER an attack starts at all, not whether it connects.
+# Centered on her body (position (0,-116), same torso-height offset as
+# Hurtbox/VenomBiteZone/LegPierceZone) rather than offset to one side or
+# mirrored by facing — _update_facing() already keeps her facing Elana every
+# frame she's not mid-attack, so by the time a trigger zone decides to fire,
+# facing is already correct regardless of which side she's checking.
+@onready var _venom_bite_trigger_zone: Area2D = $VenomBiteTriggerZone
+@onready var _leg_pierce_trigger_zone: Area2D = $LegPierceTriggerZone
+@onready var _poison_spit_trigger_zone: Area2D = $PoisonSpitTriggerZone
+# Web Pull's drag target (2026-08-22, see _do_web_pull()) -- the shape's own
+# global position, not the zone node's, since the zone's CollisionShape2D
+# carries its own offset (user-resized in the editor) separate from the
+# Area2D's local (0,0) origin.
+@onready var _venom_bite_trigger_shape: CollisionShape2D = _venom_bite_trigger_zone.get_node_or_null("CollisionShape2D")
 @onready var _arena_box: Node = get_node_or_null(arena_box_path)
 @onready var _arena_floor_zone: Node = get_node_or_null(arena_floor_zone_path)
 @onready var _terrain: TileMap = get_node_or_null(terrain_path)
@@ -457,8 +577,21 @@ func _physics_process(delta: float) -> void:
 	# frame is already cleared in time for that frame's jump-trigger check,
 	# same ordering _apply_gravity() needs relative to move_and_slide().
 	_tick_layer_transition(delta)
+	# Independent of chase movement (2026-08-22, user request: "move layer
+	# jump out of chase... always do layer jump check after every attack")
+	# -- see _tick_layer_jump_trigger()'s own comment for why it needed to
+	# stop being nested inside _apply_horizontal_movement().
+	_tick_layer_jump_trigger(delta)
 	_apply_horizontal_movement(delta)
 	_update_hp_bar()
+	# Ticks in real time regardless of what she's doing (2026-08-22, see
+	# poison_spit_cooldown's own comment) -- deliberately NOT inside
+	# _tick_down(), which early-returns whenever _is_using_attack is true, so
+	# the cooldown keeps counting down even while she's mid-Venom-Bite/
+	# Leg-Pierce/Web-Pull instead of freezing for the length of every other
+	# attack.
+	if _is_down and _poison_spit_cooldown_timer > 0.0:
+		_poison_spit_cooldown_timer -= delta
 	if _is_down:
 		_tick_down(delta)
 	else:
@@ -482,7 +615,16 @@ func _physics_process(delta: float) -> void:
 # and Godot's real physics has nothing to collide with. Instead this reads
 # the hazard label at her feet directly (_get_hazard_at_feet()) and only
 # holds her in place if it exactly matches
-# WEBFLOOR_HAZARD_NAMES[_current_floor_layer] -- nothing else, ever.
+# WEBFLOOR_HAZARD_NAMES[_current_floor_layer] -- nothing else, ever...
+# EXCEPT webFloor1 specifically (2026-08-22, user request: "make it
+# permanent collision for spider. so spider doesnt fall to map") -- Layer
+# 1's floor tag always counts as valid ground regardless of which layer
+# she's currently tracking, a permanent safety net so she can never fall
+# through the whole level into an unrecoverable void (e.g. if her tracked
+# target layer's real floor is missing, or gets erased out from under her
+# by the new breakable-terrain system). Doesn't touch _current_floor_layer
+# itself -- this only stops the physical fall, it's not a real layer
+# transition.
 # _is_on_real_floor is the tracked replacement for is_on_floor(), read by
 # _tick_layer_transition() below. This function doesn't check
 # _is_layer_transitioning — gravity is meant to apply normally throughout an
@@ -499,7 +641,8 @@ func _apply_gravity(delta: float) -> void:
 			expected_bridge = WEBBRIDGE_HAZARD_NAMES[_current_floor_layer]
 		var actual_hazard: String = _get_hazard_at_feet()
 		var was_on_real_floor: bool = _is_on_real_floor
-		_is_on_real_floor = expected_floor != "" and (actual_hazard == expected_floor or actual_hazard == expected_bridge)
+		_is_on_real_floor = (expected_floor != "" and (actual_hazard == expected_floor or actual_hazard == expected_bridge)) \
+			or actual_hazard == WEBFLOOR_HAZARD_NAMES[0]
 		if _is_on_real_floor and not was_on_real_floor:
 			print("[Broodspawner] FLOOR COLLISION: pos=%s hazard=\"%s\"" % [global_position, actual_hazard])
 		if not _is_on_real_floor:
@@ -510,78 +653,91 @@ func _apply_gravity(delta: float) -> void:
 		_is_on_real_floor = false
 		velocity.y = 0.0
 
+# Layer-jump trigger check (2026-08-22, extracted out of
+# _apply_horizontal_movement() below, user request: "move layer jump out of
+# chase. move it out. and always do layer jump check after every attack").
+# Previously nested inside the chase function, gated by the SAME guard
+# chase movement uses -- including _post_attack_pause_timer, which is meant
+# to hold off WALKING specifically so an attack doesn't visually slide
+# straight into a walk, not layer-jumping. That meant a layer mismatch
+# couldn't even start debouncing until the post-attack pause also cleared,
+# adding dead latency after every single attack. This runs on its own,
+# lighter guard instead -- everything but the pause check -- so she can
+# start (or even complete) a layer jump the instant an attack finishes,
+# while chase movement itself still waits out the pause separately.
+func _tick_layer_jump_trigger(delta: float) -> void:
+	if not (_is_down and _down_stun_timer <= 0.0 and not _is_using_attack and not _is_going_up and not _is_jumping and not _is_layer_transitioning):
+		return
+	if _platform_layers.is_empty():
+		return
+	var elana = get_tree().get_first_node_in_group("player")
+	if elana == null:
+		return
+	var elana_layer: int = _get_layer_index_for_position(elana.global_position)
+	# Her own layer is read directly from _current_floor_layer now
+	# (2026-08-21) instead of re-deriving it geometrically — see that var's
+	# declaration comment.
+	if elana_layer != -1 and _current_floor_layer != -1 and elana_layer != _current_floor_layer:
+		# Debounced (2026-08-21, user design, see
+		# layer_jump_detection_delay's declaration comment) -- doesn't jump
+		# the instant a mismatch is seen. Remembers which layer Elana's on
+		# and waits; only jumps if she's STILL on that same layer once the
+		# delay elapses. If she moves to a different layer mid-wait, the
+		# remembered layer/timer reset to the new one and the wait restarts.
+		if elana_layer != _pending_jump_target_layer:
+			_pending_jump_target_layer = elana_layer
+			_pending_jump_timer = 0.0
+		else:
+			_pending_jump_timer += delta
+			if _pending_jump_timer >= layer_jump_detection_delay:
+				_pending_jump_target_layer = -1
+				_pending_jump_timer = 0.0
+				velocity = Vector2.ZERO
+				# Higher index = physically higher up (PlatformLayer1 is
+				# index 0/lowest, PlatformLayer4 is index 3/highest) --
+				# ascend vs descend picked by comparing indices, not Y
+				# positions directly, matching every other layer-index
+				# comparison already in this file.
+				if elana_layer > _current_floor_layer:
+					_do_ascend_jump(elana_layer)
+				else:
+					_do_descend_jump(elana_layer)
+	else:
+		# No mismatch (or an invalid layer reading) -- nothing left to
+		# debounce, clear any pending watch.
+		_pending_jump_target_layer = -1
+		_pending_jump_timer = 0.0
+
 # Chases Elana horizontally while DOWN, once the landing stun's worn off
 # and she's not mid-attack (2026-08-20, user request). Stops closing the
 # gap once within down_chase_stop_distance — no need to walk until their
 # bodies are centered on top of each other, just close enough to stay in
-# range (2026-08-20, user request). Explicitly driven every frame — never
-# left at whatever an external system last wrote — which doubles as the
-# same anti-slide protection the old blanket velocity.x=0 fix provided (see
-# the git history), just no longer blocking this intentional movement.
-# Venom Bite's lunge moves her via direct global_position writes instead of
+# range (2026-08-20, user request). Always chases toward melee range by
+# default now (2026-08-22, user request: "remove chase in chance pool.
+# always chase") — EXCEPT holds at down_chase_ranged_stop_distance instead
+# whenever Elana's currently inside Poison Spit's zone ("if in poison spit
+# zone, prioritize spit over chase"), checked live every frame rather than
+# decided by a roll -- no mode/state var needed at all anymore, this is the
+# only place that distinction matters. Explicitly driven every frame — never
+# left at whatever an external system last wrote — which doubles as the same
+# anti-slide protection the old blanket velocity.x=0 fix provided (see the
+# git history), just no longer blocking this intentional movement. Venom
+# Bite's lunge moves her via direct global_position writes instead of
 # velocity, so it's unaffected by this being zeroed during _is_using_attack.
 # _post_attack_pause_timer (2026-08-20, user request) holds her still for a
 # beat after an attack finishes, so chasing doesn't re-engage the instant
-# _is_using_attack clears and read as the attack sliding straight into a walk.
+# _is_using_attack clears and read as the attack sliding straight into a
+# walk -- layer-jumping is no longer subject to this same pause, see
+# _tick_layer_jump_trigger() above.
 func _apply_horizontal_movement(delta: float) -> void:
 	if _post_attack_pause_timer > 0.0:
 		_post_attack_pause_timer -= delta
 	if _is_down and _down_stun_timer <= 0.0 and _post_attack_pause_timer <= 0.0 and not _is_using_attack and not _is_going_up and not _is_jumping and not _is_layer_transitioning:
 		var elana = get_tree().get_first_node_in_group("player")
 		if elana != null:
-			# Layer jump takes priority over the normal horizontal chase
-			# (2026-08-21, user design) — if Elana's on a different
-			# platform_layer_paths zone than she is, jump there instead of
-			# walking (real velocity ascend / real-gravity descend, see
-			# _do_ascend_jump()/_do_descend_jump() — full rework 2026-08-21,
-			# user design: "remake this shit... real velocity jump when
-			# going up... enable the target layer collision"). Calling an
-			# async func without awaiting it still runs its body synchronously
-			# up to its first await, so whichever guard flag it sets first
-			# (_is_layer_transitioning for descend, _is_jumping for ascend's
-			# dip phase — either way the combined guard above covers it) is
-			# already true before this function returns, same frame — can't
-			# re-trigger itself next frame (same re-entry-guard pattern
-			# _go_up() needed fixing for earlier).
-			if not _platform_layers.is_empty():
-				var elana_layer: int = _get_layer_index_for_position(elana.global_position)
-				# Her own layer is read directly from _current_floor_layer
-				# now (2026-08-21) instead of re-deriving it geometrically —
-				# see that var's declaration comment.
-				if elana_layer != -1 and _current_floor_layer != -1 and elana_layer != _current_floor_layer:
-					# Debounced (2026-08-21, user design, see
-					# layer_jump_detection_delay's declaration comment) --
-					# doesn't jump the instant a mismatch is seen. Remembers
-					# which layer Elana's on and waits; only jumps if she's
-					# STILL on that same layer once the delay elapses. If she
-					# moves to a different layer mid-wait, the remembered
-					# layer/timer reset to the new one and the wait restarts.
-					if elana_layer != _pending_jump_target_layer:
-						_pending_jump_target_layer = elana_layer
-						_pending_jump_timer = 0.0
-					else:
-						_pending_jump_timer += delta
-						if _pending_jump_timer >= layer_jump_detection_delay:
-							_pending_jump_target_layer = -1
-							_pending_jump_timer = 0.0
-							velocity = Vector2.ZERO
-							# Higher index = physically higher up (PlatformLayer1
-							# is index 0/lowest, PlatformLayer4 is index
-							# 3/highest) -- ascend vs descend picked by
-							# comparing indices, not Y positions directly,
-							# matching every other layer-index comparison
-							# already in this file.
-							if elana_layer > _current_floor_layer:
-								_do_ascend_jump(elana_layer)
-							else:
-								_do_descend_jump(elana_layer)
-							return
-				else:
-					# No mismatch (or an invalid layer reading) -- nothing
-					# left to debounce, clear any pending watch.
-					_pending_jump_target_layer = -1
-					_pending_jump_timer = 0.0
-			if abs(elana.global_position.x - global_position.x) <= down_chase_stop_distance:
+			var prioritize_spit: bool = poison_spit_enabled and _poison_spit_cooldown_timer <= 0.0 and _zone_has_player(_poison_spit_trigger_zone)
+			var effective_stop_distance: float = down_chase_ranged_stop_distance if prioritize_spit else down_chase_stop_distance
+			if abs(elana.global_position.x - global_position.x) <= effective_stop_distance:
 				velocity.x = 0.0
 			else:
 				velocity.x = down_chase_speed * direction
@@ -706,9 +862,32 @@ func _tick_layer_transition(delta: float) -> void:
 			_set_active_floor_layer(_layer_transition_target)
 			_is_ascending = false
 			_layer_transition_elapsed = 0.0
-	else:
-		if _is_on_real_floor or _layer_transition_elapsed >= layer_jump_fall_timeout:
-			_is_layer_transitioning = false
+	elif _is_on_real_floor:
+		# A real landing, not the fall_timeout give-up below -- fires the
+		# per-landing knockback+damage (2026-08-22, see "Layer Landing
+		# Impact" export group), except for _go_down()'s one suppressed
+		# initial drop (see _suppress_next_landing_impact's own comment).
+		_is_layer_transitioning = false
+		if _suppress_next_landing_impact:
+			_suppress_next_landing_impact = false
+		else:
+			_apply_layer_landing_impact()
+	elif _layer_transition_elapsed >= layer_jump_fall_timeout:
+		_is_layer_transitioning = false
+
+# AOE knockback+damage on a layer landing (2026-08-22, see "Layer Landing
+# Impact" export group and _tick_layer_transition()'s call site) -- same
+# _nearby_bodies()-radius-query pattern _go_down()/_go_up() already use for
+# their own landing/transition knockback, just with direct damage added on
+# top (those two are knockback-only).
+func _apply_layer_landing_impact() -> void:
+	for body in _nearby_bodies(layer_landing_knockback_radius):
+		if body.is_in_group("player") and body.has_method("apply_knockback"):
+			var away: Vector2 = (body.global_position - global_position)
+			var away_dir: Vector2 = away.normalized() if away.length() > 0.0 else Vector2.RIGHT
+			body.apply_knockback(away_dir * layer_landing_knockback + Vector2(0.0, -150.0), 0.4)
+			if body.has_method("take_damage"):
+				body.take_damage(layer_landing_damage, false, self)
 
 # Keeps direction facing Elana while DOWN and not mid-attack (locks for the
 # duration of an attack once one starts) — 2026-08-20, user request:
@@ -739,6 +918,24 @@ func _update_facing() -> void:
 	_venom_bite_zone.position.x = abs(_venom_bite_zone.position.x) * direction
 	_leg_pierce_zone.scale.x = direction
 	_leg_pierce_zone.position.x = abs(_leg_pierce_zone.position.x) * direction
+	# Trigger zones (2026-08-22, user request: "fix flip direction for
+	# triggerzones") -- same mirroring, same reason. They were authored
+	# centered/symmetric so this didn't matter at first, but the user's own
+	# in-editor resize gave each CollisionShape2D a real X offset off her
+	# root (e.g. VenomBiteTriggerZone's shape now sits well to one side), so
+	# without mirroring here the zone stayed pinned to whichever side it was
+	# authored on regardless of which way she's actually facing -- she'd
+	# never detect Elana approaching from her other side. scale.x flips the
+	# zone's own children (including that CollisionShape2D's offset); the
+	# zone node's own root position is still (0,0) same as the hit zones, so
+	# the abs()*direction line is a no-op safety match, not strictly needed
+	# yet, but keeps this identical to the hit-zone pattern above.
+	_venom_bite_trigger_zone.scale.x = direction
+	_venom_bite_trigger_zone.position.x = abs(_venom_bite_trigger_zone.position.x) * direction
+	_leg_pierce_trigger_zone.scale.x = direction
+	_leg_pierce_trigger_zone.position.x = abs(_leg_pierce_trigger_zone.position.x) * direction
+	_poison_spit_trigger_zone.scale.x = direction
+	_poison_spit_trigger_zone.position.x = abs(_poison_spit_trigger_zone.position.x) * direction
 	# Her whole body silhouette flips too (2026-08-21, user request: "flip
 	# all the visuals too") — _body_shape IS the root CollisionPolygon2D,
 	# so scaling it mirrors everything nested inside in one step: the main
@@ -754,6 +951,7 @@ func _update_hp_bar() -> void:
 # ── UP state ──────────────────────────────────────────────────────────────
 
 func _tick_up(delta: float) -> void:
+	hp = min(hp + max_hp * (up_regen_percent_per_second / 100.0) * delta, max_hp)
 	if not _arena_triggered:
 		return
 	if spit_enabled:
@@ -855,7 +1053,6 @@ func _go_down() -> void:
 	_is_down = true
 	_is_going_up = false
 	_down_timer = down_duration
-	_down_attack_cooldown = down_attack_gap
 	_color_rect.modulate = TINT_DOWN
 	# Initial drop (2026-08-21, converted to the real-gravity descend system
 	# same session as the ascend/descend rework — see "Layer Jumping" export
@@ -868,8 +1065,12 @@ func _go_down() -> void:
 	# _tick_down() already no-ops while _is_layer_transitioning is true, same
 	# guard the between-layer descends rely on, so nothing else needs to wait
 	# on this explicitly. Falls back to the old organic-gravity behavior
-	# below if no layers are wired.
+	# below if no layers are wired. _suppress_next_landing_impact (2026-08-22)
+	# skips the new generic per-landing knockback+damage for this one
+	# specific landing, since the dedicated stun+knockback right below is
+	# already this transition's landing reaction -- see that var's comment.
 	if not _platform_layers.is_empty():
+		_suppress_next_landing_impact = true
 		_do_descend_jump(0)
 		while _is_layer_transitioning:
 			await get_tree().physics_frame
@@ -901,29 +1102,57 @@ func _tick_down(delta: float) -> void:
 		_is_going_up = true
 		_go_up()
 		return
-	if _down_stun_timer > 0.0:
+	# down_post_attack_pause is now the only gap between attacks at all
+	# (2026-08-22 — replaced the old down_attack_gap timer with trigger
+	# zones, see _try_start_zone_attack()) -- without checking it here too,
+	# an attack could re-fire the instant _is_using_attack clears if Elana's
+	# still standing inside its trigger zone.
+	if _down_stun_timer > 0.0 or _post_attack_pause_timer > 0.0:
 		return
-	_down_attack_cooldown -= delta
-	if _down_attack_cooldown <= 0.0:
-		_down_attack_cooldown = down_attack_gap
-		_start_random_down_attack()
+	_try_start_zone_attack()
 
-func _start_random_down_attack() -> void:
-	# Pool built from whichever attacks are currently enabled (2026-08-20,
-	# user request — Leg Pierce/Poison Spit disabled for now, only Venom
-	# Bite) instead of a fixed randi() % 3. If nothing's enabled, this is a
-	# no-op — _down_attack_cooldown just resets and tries again next gap.
-	var pool: Array[int] = []
-	if venom_bite_enabled:
-		pool.append(0)
-	if leg_pierce_enabled:
-		pool.append(1)
-	if poison_spit_enabled:
-		pool.append(2)
-	if pool.is_empty():
+# Fully deterministic, no roll at all (2026-08-22, final design this
+# session, user's own exact spec: "lets make the poison spit be out of the
+# chance pool. and always trigger when elana is in the poison spit zone. ...
+# remove chase in chance pool. always chase. if in poison spit zone,
+# prioritize spit over chase. ... for web pull. remove the chance too. have
+# it do the pull every 5 attacks, any attack" -- REPLACES the flat 3-way
+# roll from earlier this same session entirely). Priority order:
+#   1. Web Pull, once every web_pull_attack_interval attacks (see
+#      _attacks_since_web_pull) -- fires unconditionally, no zone check,
+#      since it has no trigger zone at all.
+#   2. Poison Spit, whenever Elana's in its zone AND it's off cooldown --
+#      takes priority over melee even if she's also in Venom Bite/Leg
+#      Pierce range at the same time, per "prioritize spit over chase."
+#      While on cooldown (poison_spit_cooldown, 2026-08-22 addition -- see
+#      _poison_spit_cooldown_timer) it drops out of this priority chain
+#      entirely, same as if disabled, and step 3 applies instead.
+#   3. Otherwise, whichever of Venom Bite/Leg Pierce's zones has Elana in
+#      it (both eligible at once still picks randomly between them, same
+#      "randomly picked" flavor every earlier design here kept) -- this is
+#      "always chase" by default, since _apply_horizontal_movement() is
+#      always closing to melee range unless step 2 applies instead.
+# If nothing above matches, this is a no-op and just tries again next frame.
+func _try_start_zone_attack() -> void:
+	var choice: int = -1
+	if web_pull_enabled and _attacks_since_web_pull >= web_pull_attack_interval:
+		choice = 3
+	elif poison_spit_enabled and _poison_spit_cooldown_timer <= 0.0 and _zone_has_player(_poison_spit_trigger_zone):
+		choice = 2
+	else:
+		var pool: Array[int] = []
+		if venom_bite_enabled and _zone_has_player(_venom_bite_trigger_zone):
+			pool.append(0)
+		if leg_pierce_enabled and _zone_has_player(_leg_pierce_trigger_zone):
+			pool.append(1)
+		if not pool.is_empty():
+			choice = pool[randi() % pool.size()]
+	if choice == -1:
 		return
+	_attacks_since_web_pull = 0 if choice == 3 else _attacks_since_web_pull + 1
+	if choice == 2:
+		_poison_spit_cooldown_timer = poison_spit_cooldown
 	_is_using_attack = true
-	var choice: int = pool[randi() % pool.size()]
 	match choice:
 		0:
 			await _do_venom_bite()
@@ -931,10 +1160,24 @@ func _start_random_down_attack() -> void:
 			await _do_leg_pierce()
 		2:
 			await _do_poison_spit()
+		3:
+			await _do_web_pull()
 	if is_instance_valid(self):
 		_color_rect.modulate = TINT_DOWN
 		_is_using_attack = false
 		_post_attack_pause_timer = down_post_attack_pause
+
+# True if any player-group body currently overlaps the given trigger zone
+# (2026-08-22) -- same get_overlapping_bodies()/is_in_group("player") check
+# the hit-detection zones already do at the moment of impact, just used here
+# to gate whether an attack starts at all instead of whether it connects.
+func _zone_has_player(zone: Area2D) -> bool:
+	if zone == null:
+		return false
+	for body in zone.get_overlapping_bodies():
+		if body.is_in_group("player"):
+			return true
+	return false
 
 # Fixed integer frame count for a scripted move/animation loop lasting
 # duration seconds (2026-08-22 cleanup — pulled out of _move_for(), the
@@ -1118,6 +1361,59 @@ func _do_poison_spit() -> void:
 		proj.aim_direction = base_dir.rotated(angle_offset)
 		proj.global_position = global_position
 		get_parent().call_deferred("add_child", proj)
+
+# Web Pull (2026-08-22, user request, no trigger zone of its own -- see
+# "Web Pull" export group). Pure stun+reposition, no direct damage: draws a
+# web line from her to Elana, stuns her for web_pull_windup, then drags her
+# to VenomBiteTriggerZone's position over web_pull_drag_duration via
+# elana.gd's own apply_drag_stun() -- which keeps her stunned for the whole
+# drag too, not just the windup, per the user's own spec ("stunned through
+# the whole pull") -- setting her up for a follow-up Venom Bite.
+# She's stationary (no chase, no layer-jump trigger) for this entire
+# function, same as every other attack (2026-08-22, user request: "lock
+# jumping and lock chase" during this one specifically) -- already
+# guaranteed by _apply_horizontal_movement()'s existing `not _is_using_attack`
+# guard, which _try_start_zone_attack() sets true before awaiting this and
+# only clears after it returns; no separate lock needed here.
+func _do_web_pull() -> void:
+	_color_rect.modulate = TINT_WEB_PULL
+	var elana = get_tree().get_first_node_in_group("player")
+	if elana == null:
+		return
+	# Purely cosmetic connecting line, no collision/hit-detection role of its
+	# own (damage/stun below is direct code, not overlap-based) -- doesn't
+	# need to be a real scene node the way hitboxes do; see
+	# [[feedback-collision-shapes-in-scene]], which is specifically about
+	# collision shapes.
+	var line := Line2D.new()
+	line.width = 4.0
+	line.default_color = Color(0.9, 0.9, 0.85, 0.8)
+	add_child(line)
+	line.points = [Vector2.ZERO, to_local(elana.global_position)]
+	if elana.has_method("apply_stun"):
+		elana.apply_stun(web_pull_windup)
+	var windup_frames: int = _frame_count_for(web_pull_windup)
+	for frame in range(1, windup_frames + 1):
+		await get_tree().physics_frame
+		if not is_instance_valid(self):
+			line.queue_free()
+			return
+		if is_instance_valid(elana):
+			line.points = [Vector2.ZERO, to_local(elana.global_position)]
+	if not is_instance_valid(elana) or not elana.has_method("apply_drag_stun"):
+		line.queue_free()
+		return
+	var pull_target: Vector2 = _venom_bite_trigger_shape.global_position if _venom_bite_trigger_shape != null else _venom_bite_trigger_zone.global_position
+	elana.apply_drag_stun(pull_target, web_pull_drag_duration, web_pull_drag_duration)
+	var drag_frames: int = _frame_count_for(web_pull_drag_duration)
+	for frame in range(1, drag_frames + 1):
+		await get_tree().physics_frame
+		if not is_instance_valid(self):
+			line.queue_free()
+			return
+		if is_instance_valid(elana):
+			line.points = [Vector2.ZERO, to_local(elana.global_position)]
+	line.queue_free()
 
 func _go_up() -> void:
 	_color_rect.modulate = TINT_BASE

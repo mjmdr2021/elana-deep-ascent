@@ -6,16 +6,27 @@
 size = Vector2(360, 232)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_venom_bite"]
-size = Vector2(174, 174)
+size = Vector2(184, 112)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_venom_bite_trigger"]
+size = Vector2(216, 120)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_leg_pierce_trigger"]
+size = Vector2(192, 238)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_poison_spit_trigger"]
+size = Vector2(344, 488)
 
 [node name="Broodspawner" type="CharacterBody2D" unique_id=1852240865]
 collision_layer = 0
 collision_mask = 0
 script = ExtResource("1_broodspawner")
+max_hp = 12000
+xp_reward = 3000
 
 [node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="." unique_id=426223042]
 position = Vector2(0, -112)
-polygon = PackedVector2Array(-96, 48, 128, 48, 128, 112, -96, 112)
+polygon = PackedVector2Array(-80, 48, 128, 48, 128, 112, -80, 112)
 
 [node name="Polygon2D" type="Polygon2D" parent="CollisionPolygon2D" unique_id=864521613]
 color = Color(0.4, 0.5, 0.18, 1)
@@ -55,7 +66,7 @@ collision_layer = 0
 collision_mask = 2
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="VenomBiteZone" unique_id=2124969174]
-position = Vector2(214, 32)
+position = Vector2(148, 76)
 shape = SubResource("RectangleShape2D_venom_bite")
 
 [node name="ColorRect" type="ColorRect" parent="VenomBiteZone" unique_id=1943194630]
@@ -86,7 +97,88 @@ polygon = PackedVector2Array(-71, -56, 17, 40, -7, 160, 1, 48, -63, -8, -167, 12
 
 [node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="LegPierceZone" unique_id=1406770421]
 position = Vector2(175, -40)
-polygon = PackedVector2Array(-71, -56, 17, 40, 57, 160, -7, 160, -151, 160, -23, 48, -63, -8, -167, 128, -199, 128)
+polygon = PackedVector2Array(-71, -76, 41, 36, 33, 156, -111, 156, -71, 60, -103, 44, -167, 128, -199, 128)
+
+[node name="VenomBiteTriggerZone" type="Area2D" parent="." unique_id=305881142]
+position = Vector2(0, -116)
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="VenomBiteTriggerZone" unique_id=305881143]
+position = Vector2(124, 72)
+shape = SubResource("RectangleShape2D_venom_bite_trigger")
+debug_color = Color(0.9997552, 0, 0.1176158, 0.41960785)
+
+[node name="ColorRect" type="ColorRect" parent="VenomBiteTriggerZone" unique_id=305881144]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -250.0
+offset_top = -110.0
+offset_right = 250.0
+offset_bottom = 110.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.6, 0.9, 0.4, 0.15)
+metadata/_edit_use_anchors_ = true
+
+[node name="LegPierceTriggerZone" type="Area2D" parent="." unique_id=305881145]
+position = Vector2(0, -116)
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="LegPierceTriggerZone" unique_id=305881146]
+position = Vector2(256, 11)
+shape = SubResource("RectangleShape2D_leg_pierce_trigger")
+debug_color = Color(0.82799053, 0.0015286326, 0.95086056, 0.41960785)
+
+[node name="ColorRect" type="ColorRect" parent="LegPierceTriggerZone" unique_id=305881147]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -130.0
+offset_right = 300.0
+offset_bottom = 130.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.8, 0.4, 0.3, 0.15)
+metadata/_edit_use_anchors_ = true
+
+[node name="PoisonSpitTriggerZone" type="Area2D" parent="." unique_id=305881148]
+position = Vector2(0, -116)
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="PoisonSpitTriggerZone" unique_id=305881149]
+position = Vector2(525, 12)
+shape = SubResource("RectangleShape2D_poison_spit_trigger")
+debug_color = Color(0.24509025, 0.63638633, 3.85046e-07, 0.41960785)
+
+[node name="ColorRect" type="ColorRect" parent="PoisonSpitTriggerZone" unique_id=305881150]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -450.0
+offset_top = -150.0
+offset_right = 450.0
+offset_bottom = 150.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.5, 0.8, 0.3, 0.15)
+metadata/_edit_use_anchors_ = true
 
 [node name="WebAnchorPoint1a" type="Marker2D" parent="." unique_id=628249991]
 position = Vector2(-520, 140)

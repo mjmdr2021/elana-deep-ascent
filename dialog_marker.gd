@@ -6,7 +6,12 @@ extends Area2D
 # different content.
 const DialogueData = preload("res://dialogue_data.gd")
 
-enum CutsceneType { GLINT_SCOUT_TUTORIAL, CAMERA_PAN, BOSS1_DROP_ENTRANCE, AIR_DASH_TUTORIAL }
+# BOSS2_HOLE_ENTRANCE appended at the end (2026-08-22, user request: "add
+# cutscene type. boss2HoleEntranceCutScene"), not inserted between existing
+# entries -- GDScript enums serialize as plain integers in .tscn files
+# (cutscene_type = N), so reordering would silently reassign every already-
+# placed marker after the insertion point to the wrong type.
+enum CutsceneType { GLINT_SCOUT_TUTORIAL, CAMERA_PAN, BOSS1_DROP_ENTRANCE, AIR_DASH_TUTORIAL, BOSS2_HOLE_ENTRANCE }
 
 @export var cutscene_type: CutsceneType = CutsceneType.GLINT_SCOUT_TUTORIAL
 
@@ -81,6 +86,17 @@ func _on_body_entered(body: Node) -> void:
 				return
 			GameData.air_dash_tutorial_done = true
 			_start_air_dash_tutorial_cutscene(body)
+		CutsceneType.BOSS2_HOLE_ENTRANCE:
+			# BossCameraLock() is already boss-agnostic (reads whichever
+			# boss is currently in the "bosses" group, calls duck-typed
+			# methods on it) despite its Boss1-flavored name -- Elemander
+			# needs no new sequence logic of his own, just his own marker
+			# actually wired to a boss-entrance type instead of silently
+			# defaulting to GLINT_SCOUT_TUTORIAL (see the marker fix in
+			# full_map.tscn). Same re-entry safety as BOSS1_DROP_ENTRANCE
+			# above -- no one-time flag needed, GameData.in_cutscene
+			# blocks a concurrent re-trigger for the same reason.
+			BossCameraLock(body)
 
 func _start_scout_tutorial_cutscene(elana: Node) -> void:
 	GameData.in_cutscene = true

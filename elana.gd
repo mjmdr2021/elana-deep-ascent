@@ -2,6 +2,9 @@
 
 @export var flip_offset_x: float = 0.0  # nudges the sprite when facing left, to compensate for off-center art
 var _sprite_base_x: float = 0.0
+# 2026-08-22, user request: "elana should sink" while on webBridge tiles.
+var _sprite_base_y: float = 0.0
+const WEB_BRIDGE_SINK_DEPTH: float = 32.0  # max downward sprite offset at full wrap, webBridge only
 const MOVE_SPEED = 100.0
 const JUMP_VELOCITY = -300.0
 const WALL_SLIDE_MAX_SPEED = 40.0
@@ -73,15 +76,37 @@ const SLIPPERY_ACCEL: float = 120.0
 # same pattern as on_slippery_tile above. Standing still on it builds a
 # wrap meter that slows her (capped at 50% speed reduction even at full
 # wrap) and, past half wrap, also locks out jump/dodge-roll entirely. Any
-# movement (walk or jump) or a charged attack of any weapon resets it to 0
-# instantly — see _tick_web_wrap().
+# movement (walk or jump) resets it to 0 instantly -- UNLESS she's already
+# fully engulfed (web_wrap >= 1.0), at which point walking/jumping no longer
+# breaks it at all (2026-08-22, user request) -- only a charged attack of
+# any weapon does, see heavy_attack() -- see _tick_web_wrap().
 var on_web_tile: bool = false
+# webBridge tiles specifically (2026-08-22, user request: "when walking on
+# webBridge, elana sinks and triggers the web wrap even when moving, will
+# continue the web wrap as long as in contact with webBridge hazard tile")
+# -- a separate flag from on_web_tile (still true for webBridge too, see
+# terrain_hazards.gd) since it drives a different rule in _tick_web_wrap():
+# no standing-still requirement at all, walking across a bridge doesn't
+# pause or reset the ramp the way webFloor's does.
+var on_web_bridge_tile: bool = false
 var web_wrap: float = 0.0  # 0.0 (free) .. 1.0 (fully wrapped)
 var _web_still_timer: float = 0.0
-const WEB_STILL_THRESHOLD: float = 5.0  # seconds standing still before wrap starts building
-const WEB_WRAP_RAMP_TIME: float = 6.0  # seconds from 0 to full wrap once it starts
+# No grace period (2026-08-22, user request: "the web wrap will start once
+# elana stops moving") -- was 5.0.
+const WEB_STILL_THRESHOLD: float = 0.0  # seconds standing still before wrap starts building
+# 2026-08-22, user request: "takes 1 second to fully engulf elana", then
+# retuned once more same session ("make the ramp rate 1.5 seconds on both" --
+# both webFloor's standing-still ramp and webBridge's continuous ramp share
+# this one constant) -- was 6.0, then 1.0.
+const WEB_WRAP_RAMP_TIME: float = 1.5  # seconds from 0 to full wrap once it starts
 const WEB_WRAP_LOCK_THRESHOLD: float = 0.5  # wrap fraction past which jump/dodge lock out
-const WEB_WRAP_MAX_SLOW: float = 0.5  # speed floor at full wrap (1.0 - this)
+# 2026-08-22, user request: full wrap now means fully immobilized (0% speed),
+# not just slowed -- was 0.5 (50% speed floor). Combined with jump/dodge
+# already locking out past WEB_WRAP_LOCK_THRESHOLD and movement no longer
+# breaking wrap once fully engulfed (see on_web_bridge_tile's comment
+# block), 100% wrap now means completely stuck -- only heavy_attack()'s
+# instant-zero escape hatch frees her.
+const WEB_WRAP_MAX_SLOW: float = 1.0  # speed floor at full wrap (1.0 - this)
 var dodge_timer = 0.0
 var dodge_cooldown = 0.0
 var is_air_dashing = false
@@ -187,6 +212,7 @@ func _ready():
 	if _sprite:
 		_sprite.z_index = 2
 		_sprite_base_x = _sprite.position.x
+		_sprite_base_y = _sprite.position.y
 		_sprite_effects_material = ShaderMaterial.new()
 		_sprite_effects_material.shader = preload("res://elana_sprite_effects.gdshader")
 		_sprite.material = _sprite_effects_material
@@ -715,15 +741,32 @@ func stop_story_glow() -> void:
 # is what "standing still" means here — this one check naturally covers
 # both stated ways to break free (walking moves velocity.x off zero,
 # jumping leaves is_on_floor()), no separate input-polling needed.
+# webBridge tiles bypass this "standing still" requirement entirely
+# (2026-08-22, user request, see on_web_bridge_tile's own comment) -- wrap
+# builds continuously the whole time she's in contact with one, walking
+# across it doesn't pause or reset it, only leaving the tile does.
+# Once fully engulfed (web_wrap >= 1.0), walking/jumping no longer breaks it
+# at all (2026-08-22, user request) -- skips the reset-on-movement check
+# entirely and just holds at 1.0 until heavy_attack() zeroes it instead.
 func _tick_web_wrap(delta: float) -> void:
-	var standing_still: bool = on_web_tile and is_on_floor() and abs(velocity.x) < 1.0
-	if standing_still:
-		_web_still_timer += delta
-		if _web_still_timer >= WEB_STILL_THRESHOLD:
+	if web_wrap < 1.0:
+		if on_web_bridge_tile:
+			_web_still_timer = 0.0
 			web_wrap = min(1.0, web_wrap + delta / WEB_WRAP_RAMP_TIME)
-	else:
-		_web_still_timer = 0.0
-		web_wrap = 0.0
+		else:
+			var standing_still: bool = on_web_tile and is_on_floor() and abs(velocity.x) < 1.0
+			if standing_still:
+				_web_still_timer += delta
+				if _web_still_timer >= WEB_STILL_THRESHOLD:
+					web_wrap = min(1.0, web_wrap + delta / WEB_WRAP_RAMP_TIME)
+			else:
+				_web_still_timer = 0.0
+				web_wrap = 0.0
+	# Rising white coating visual (2026-08-22, user request: "a rising white
+	# transparent thing that would eventually cover elana") — see
+	# elana_sprite_effects.gdshader's web_wrap_amount uniform.
+	if _sprite_effects_material != null:
+		_sprite_effects_material.set_shader_parameter("web_wrap_amount", web_wrap)
 
 func _tick_status_effects(delta: float) -> void:
 	_tick_web_wrap(delta)
@@ -1288,6 +1331,14 @@ func _update_sprite(delta: float) -> void:
 	if not _sprite:
 		return
 	_sprite.flip_h = facing == -1
+	# Sinks into webBridge tiles as wrap builds (2026-08-22, user request:
+	# "elana should sink") -- webBridge only, not plain webFloor, matching
+	# on_web_bridge_tile's own scope. Tracks web_wrap directly rather than
+	# easing separately -- wrap itself already ramps smoothly and drops back
+	# to 0 the instant she's no longer on a bridge, so this naturally follows
+	# the same motion with no extra state needed.
+	var web_sink: float = (web_wrap * WEB_BRIDGE_SINK_DEPTH) if on_web_bridge_tile else 0.0
+	_sprite.position.y = _sprite_base_y + web_sink
 	_sprite.position.x = _sprite_base_x + (flip_offset_x if facing == -1 else 0.0)
 	var attacking_now = is_attacking or is_plunge_attacking
 	if attacking_now and not _was_attacking_anim:
@@ -1472,7 +1523,13 @@ func _handle_attack_input(delta: float) -> void:
 	# light attack at all while wall-jump-locked (see above) — even with
 	# chain_claw exempted from the early return, only charging through to
 	# the heavy release is allowed during that window, not a light tap.
-	if not _wall_jump_input_locked and Input.is_action_just_pressed("attack") and not is_attacking and not is_plunge_attacking and not is_charging and not transforming:
+	# Fully web-wrapped (2026-08-22, user request: "when elana is web
+	# wrapped 100%, disable light attack. only allow heavy attack") also
+	# blocks this branch specifically -- NOT the whole function, since the
+	# charge-accumulation block right below (and heavy_attack() itself,
+	# triggered on "attack" release elsewhere) must keep working: a charged
+	# attack is her only escape from full wrap (see heavy_attack()).
+	if web_wrap < 1.0 and not _wall_jump_input_locked and Input.is_action_just_pressed("attack") and not is_attacking and not is_plunge_attacking and not is_charging and not transforming:
 		if not is_on_floor() and not _in_water and Input.is_action_pressed("move_down"):
 			_start_plunge()
 		else:
@@ -1486,7 +1543,10 @@ func _handle_attack_input(delta: float) -> void:
 			charge_timer = 0.0
 
 func _update_facing_from_mouse() -> void:
-	if not is_plunge_attacking and not _is_spinning and not _wall_jump_input_locked:
+	# Fully web-wrapped also locks facing (2026-08-22, user request: "hold
+	# directional movement too. so she cant face left or right") -- same
+	# guard style as the other lock windows here, just one more condition.
+	if web_wrap < 1.0 and not is_plunge_attacking and not _is_spinning and not _wall_jump_input_locked:
 		var mouse_pos = get_global_mouse_position()
 		var hb_width = _override_hitbox_size.x if _override_hitbox_size.x > 0 else GameData.weapon_hitbox_size.x
 		if mouse_pos.x > global_position.x:
