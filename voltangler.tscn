@@ -1,0 +1,126 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://voltangler.gd" id="1_voltangler"]
+[ext_resource type="Script" uid="uid://bmjyqjn82muoe" path="res://hit_handler.gd" id="2_hithandler"]
+[ext_resource type="Script" path="res://voltangler_lantern.gd" id="3_lantern"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_body"]
+radius = 50.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hurt"]
+radius = 54.0
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_aggro"]
+size = Vector2(500, 300)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_pulsing_shock"]
+radius = 150.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_lantern_hurt"]
+radius = 20.0
+
+[sub_resource type="Gradient" id="Gradient_lantern_glow"]
+offsets = PackedFloat32Array(0, 0.4, 1)
+colors = PackedColorArray(1, 0.98, 0.85, 0.95, 1, 0.9, 0.5, 0.7, 1, 0.85, 0.3, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_lantern_glow"]
+gradient = SubResource("Gradient_lantern_glow")
+width = 200
+height = 200
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[node name="Voltangler" type="CharacterBody2D" unique_id=3005550101]
+collision_layer = 2
+script = ExtResource("1_voltangler")
+max_hp = 2000
+xp_reward = 200
+defense = 200
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=3005550102]
+shape = SubResource("CircleShape2D_body")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=3005550103]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -50.0
+offset_top = -45.0
+offset_right = 50.0
+offset_bottom = 45.0
+grow_horizontal = 2
+grow_vertical = 2
+pivot_offset = Vector2(50, 45)
+color = Color(0.25, 0.45, 0.75, 1)
+
+[node name="Hurtbox" type="Area2D" parent="." unique_id=3005550104]
+collision_layer = 4
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox" unique_id=3005550105]
+shape = SubResource("CircleShape2D_hurt")
+
+[node name="AggroZone" type="Area2D" parent="." unique_id=3005550106]
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="AggroZone" unique_id=3005550107]
+shape = SubResource("RectangleShape2D_aggro")
+
+[node name="PulsingShockZone" type="Area2D" parent="." unique_id=3005550108]
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="PulsingShockZone" unique_id=3005550109]
+shape = SubResource("CircleShape2D_pulsing_shock")
+
+[node name="Lantern" type="Node2D" parent="." unique_id=3005550110]
+position = Vector2(40, -60)
+script = ExtResource("3_lantern")
+
+[node name="Hurtbox" type="Area2D" parent="Lantern" unique_id=3005550111]
+collision_layer = 4
+collision_mask = 0
+monitoring = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Lantern/Hurtbox" unique_id=3005550112]
+shape = SubResource("CircleShape2D_lantern_hurt")
+
+[node name="Bulb" type="ColorRect" parent="Lantern" unique_id=3005550113]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -14.0
+offset_top = -14.0
+offset_right = 14.0
+offset_bottom = 14.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.9, 0.85, 0.4, 1)
+
+[node name="Glow" type="Sprite2D" parent="Lantern" unique_id=3005550114]
+visible = false
+z_index = 1
+texture = SubResource("GradientTexture2D_lantern_glow")
+
+[node name="HPBar" type="Node2D" parent="." unique_id=3005550115]
+position = Vector2(-30, -110)
+
+[node name="Background" type="ColorRect" parent="HPBar" unique_id=3005550116]
+offset_right = 60.0
+offset_bottom = 8.0
+color = Color(0.18862307, 0.19213569, 0.18689519, 1)
+
+[node name="Fill" type="ColorRect" parent="HPBar" unique_id=3005550117]
+offset_right = 60.0
+offset_bottom = 8.0
+color = Color(0.9, 0.85, 0.2, 1)
+
+[node name="HitHandler" type="Node" parent="." unique_id=3005550118]
+script = ExtResource("2_hithandler")

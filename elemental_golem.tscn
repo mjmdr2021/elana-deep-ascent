@@ -53,7 +53,7 @@ speed = 15.0
 chase_speed = 25.0
 max_hp = 1000
 xp_reward = 180
-defense = 60
+defense = 90
 attack_damage = 22
 attack_speed_mult = 0.5
 

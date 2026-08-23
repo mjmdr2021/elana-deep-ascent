@@ -68,6 +68,7 @@ var danger_sense_button: Button
 var ant_queen_buff_button: Button
 var reset_cooldowns_button: Button
 var fixed_zoom_button: Button
+var fixed_zoom_0_1x_button: Button
 var screen_shake_button: Button
 var item_use_cooldown = 0.0
 var _stat_labels: Dictionary = {}
@@ -649,6 +650,11 @@ func _setup_toggles():
 
 	canvas.add_child(_make_toggle_button("Reset to Lvl 1 (Dev)", Vector2(10, 890), _on_reset_to_level_1))
 
+	fixed_zoom_0_1x_button = _make_toggle_button(
+		"Zoom 0.1x: ON" if GameData.dev_fixed_zoom_0_1x else "Zoom 0.1x: OFF",
+		Vector2(10, 930), _on_fixed_zoom_0_1x_toggled)
+	canvas.add_child(fixed_zoom_0_1x_button)
+
 func _on_give_respecs():
 	GameData.add_item("respecElana")
 	GameData.add_item("respecGlint")
@@ -752,6 +758,20 @@ func _on_reset_cooldowns_toggled():
 func _on_fixed_zoom_toggled():
 	GameData.dev_fixed_zoom_1x = not GameData.dev_fixed_zoom_1x
 	fixed_zoom_button.text = "Zoom 1x: ON" if GameData.dev_fixed_zoom_1x else "Zoom 1x: OFF"
+	# Mutually exclusive with the 0.1x toggle (2026-08-22) -- both flip
+	# elana.gd's camera zoom into a fixed debug value, so leaving both on
+	# would just mean whichever _update_camera_zoom() checks first silently
+	# wins; turning the other off here keeps the button labels honest.
+	if GameData.dev_fixed_zoom_1x and GameData.dev_fixed_zoom_0_1x:
+		GameData.dev_fixed_zoom_0_1x = false
+		fixed_zoom_0_1x_button.text = "Zoom 0.1x: OFF"
+
+func _on_fixed_zoom_0_1x_toggled():
+	GameData.dev_fixed_zoom_0_1x = not GameData.dev_fixed_zoom_0_1x
+	fixed_zoom_0_1x_button.text = "Zoom 0.1x: ON" if GameData.dev_fixed_zoom_0_1x else "Zoom 0.1x: OFF"
+	if GameData.dev_fixed_zoom_0_1x and GameData.dev_fixed_zoom_1x:
+		GameData.dev_fixed_zoom_1x = false
+		fixed_zoom_button.text = "Zoom 1x: OFF"
 
 func _on_screen_shake_toggled():
 	GameData.screen_shake_enabled = not GameData.screen_shake_enabled

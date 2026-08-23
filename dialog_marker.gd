@@ -18,6 +18,29 @@ enum CutsceneType { GLINT_SCOUT_TUTORIAL, CAMERA_PAN, BOSS1_DROP_ENTRANCE, AIR_D
 const CAMERA_PAN_OFFSET: Vector2 = Vector2(-400, 0)
 const CAMERA_PAN_DURATION: float = 1.5
 const CAMERA_PAN_HOLD: float = 2.0
+# Vertical nudge on top of Boss2HoleEntrance()'s pan target (2026-08-22,
+# user: "why does it pan on the bottom of elemander" -> "shift up" to show
+# more of his upper body/head) -- negative is upward in Godot's 2D Y axis.
+# Elemander's root (boss.global_position, what the pan targets by default)
+# already sits above his body's collision-shape center per elemander.tscn,
+# but that alone still read as framing too low in practice -- retune this
+# directly if it needs further adjustment.
+const BOSS2_PAN_TARGET_OFFSET: Vector2 = Vector2(0, -150)
+# BossCameraLock()'s fallback hold when the boss doesn't implement
+# start_drop_push_sequence() (2026-08-22, user request: "during this scene,
+# dont let elemander attack. lock any attack or interaction from elemander
+# at the moment") -- without a real sequence to await, GameData.in_cutscene
+# was only true for a single synchronous frame (set then immediately
+# cleared, no yield point in between), so the attack-lock every boss's own
+# _tick_idle()-equivalent already checks against in_cutscene had no real
+# window to matter. This gives any such boss a real held beat instead, long
+# enough for the zoom/HP-bar reveal to actually read before combat can
+# start. Originally written for/motivated by Elemander, but his entrance no
+# longer routes through BossCameraLock() at all (see Boss2HoleEntrance()'s
+# own pan+hold+pan-back sequence, which covers the same need on its own) --
+# kept here for whichever future boss without a real entrance sequence
+# calls BossCameraLock() directly instead.
+const FALLBACK_REVEAL_HOLD: float = 2.0
 
 # "The cave shakes" beat, fired once the pan-back finishes — throws Elana
 # up and forward (in whichever direction she's currently facing) into the
@@ -87,16 +110,7 @@ func _on_body_entered(body: Node) -> void:
 			GameData.air_dash_tutorial_done = true
 			_start_air_dash_tutorial_cutscene(body)
 		CutsceneType.BOSS2_HOLE_ENTRANCE:
-			# BossCameraLock() is already boss-agnostic (reads whichever
-			# boss is currently in the "bosses" group, calls duck-typed
-			# methods on it) despite its Boss1-flavored name -- Elemander
-			# needs no new sequence logic of his own, just his own marker
-			# actually wired to a boss-entrance type instead of silently
-			# defaulting to GLINT_SCOUT_TUTORIAL (see the marker fix in
-			# full_map.tscn). Same re-entry safety as BOSS1_DROP_ENTRANCE
-			# above -- no one-time flag needed, GameData.in_cutscene
-			# blocks a concurrent re-trigger for the same reason.
-			BossCameraLock(body)
+			Boss2HoleEntrance(body)
 
 func _start_scout_tutorial_cutscene(elana: Node) -> void:
 	GameData.in_cutscene = true
@@ -257,6 +271,40 @@ func Boss1NormalEntrance(elana: Node) -> void:
 	GameData.in_cutscene = false
 	_normal_entrance_running = false
 
+# Elemander's own entrance beat (2026-08-22, user request: "add a pan to
+# the right to where elemander is in the cutscene", reordered same session:
+# "zoom out first before panning") -- zooms out to the wide boss-reveal view
+# and reveals the HP bar FIRST (_reveal_boss_camera_lock(), same as
+# BossCameraLock() ends with), THEN pans the camera from Elana over to
+# wherever Elemander actually is (not a fixed offset like Hollowfang's
+# CAMERA_PAN_OFFSET, since this needs to point at his real position/
+# whichever direction that happens to be) at that already-wide view instead
+# of her normal tight zoom, holds, pans back. Doesn't delegate to
+# BossCameraLock() anymore -- the pan+hold+pan-back sequence itself (5s
+# total) already covers far more than FALLBACK_REVEAL_HOLD's 2s would, so
+# calling that too would just be redundant on top of this. Same
+# camera_offset_base/camera_pan_active technique Boss1NormalEntrance() above
+# already uses, same reasoning: _update_camera_lock() would otherwise fight
+# the tween in real time if left running.
+func Boss2HoleEntrance(elana: Node) -> void:
+	GameData.in_cutscene = true
+	var boss = get_tree().get_first_node_in_group("bosses")
+	if boss and is_instance_valid(boss):
+		if boss.has_method("drop_entrance_gate"):
+			boss.drop_entrance_gate(ENTRANCE_GATE_POS)
+		_reveal_boss_camera_lock(boss, Vector2(2.0, 2.0))
+		GameData.camera_pan_active = true
+		var pan_offset: Vector2 = boss.global_position - elana.global_position + BOSS2_PAN_TARGET_OFFSET
+		var tween = create_tween()
+		tween.tween_property(elana, "camera_offset_base", pan_offset, CAMERA_PAN_DURATION) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tween.tween_interval(CAMERA_PAN_HOLD)
+		tween.tween_property(elana, "camera_offset_base", Vector2.ZERO, CAMERA_PAN_DURATION) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		await tween.finished
+		GameData.camera_pan_active = false
+	GameData.in_cutscene = false
+
 # Boss 1 Drop Entrance — a second, later beat once Elana's actually made her
 # way into the arena proper, not the instant the camera-pan reveal above
 # knocks her in. No camera change happens until Drop Push has fully finished
@@ -269,7 +317,10 @@ func Boss1NormalEntrance(elana: Node) -> void:
 # pan cutscene's tail end and a standalone CaveDisruptorArenaZone safety-net
 # check in hollowfang.gd into one place. Awaits the whole Drop Push sequence
 # before releasing control, so she can't act again until it's done.
-func BossCameraLock(elana: Node) -> void:
+# zoom_level defaults to Hollowfang's original 3.5 -- BOSS2_HOLE_ENTRANCE's
+# caller below passes Vector2(2.0, 2.0) instead (2026-08-22, user request:
+# "for boss2hole make it 3 zoom for camera", retuned to 2.0 same session).
+func BossCameraLock(elana: Node, zoom_level: Vector2 = Vector2(3.5, 3.5)) -> void:
 	GameData.in_cutscene = true
 	var boss = get_tree().get_first_node_in_group("bosses")
 	if boss:
@@ -284,21 +335,34 @@ func BossCameraLock(elana: Node) -> void:
 			boss.drop_entrance_gate(ENTRANCE_GATE_POS)
 		if boss.has_method("start_drop_push_sequence"):
 			await boss.start_drop_push_sequence(elana)
-
-		# Camera lock/zoom/HP bar reveal — deliberately AFTER Drop Push, not
-		# before or during it.
-		_reveal_boss_camera_lock(boss)
+			# Camera lock/zoom/HP bar reveal — deliberately AFTER Drop Push,
+			# not before or during it.
+			_reveal_boss_camera_lock(boss, zoom_level)
+		else:
+			# No real entrance sequence to await -- reveal immediately
+			# (zoom/HP bar shouldn't wait on a hold that only exists to
+			# protect the reveal itself), then hold the cutscene beat
+			# ourselves so in_cutscene doesn't clear the same frame it was
+			# set. Every boss's own attack-lock (their _tick_idle()-
+			# equivalent already checks in_cutscene) only has real bite
+			# with this window in place. See FALLBACK_REVEAL_HOLD's comment.
+			_reveal_boss_camera_lock(boss, zoom_level)
+			await get_tree().create_timer(FALLBACK_REVEAL_HOLD).timeout
 
 	GameData.in_cutscene = false
 
 # Shared by BossCameraLock() (after its own Drop Push sequence) and
 # Boss1NormalEntrance() (right after its own landing-wait/gate-seal) — the
 # moment either entrance is considered "done," regardless of which one
-# actually got her into the arena.
-func _reveal_boss_camera_lock(boss: Node) -> void:
+# actually got her into the arena. zoom_level defaults to Hollowfang's
+# original 3.5 (2026-08-22, per-boss overridable -- see
+# GameData.boss_zoom_level's own comment and BossCameraLock()'s
+# BOSS2_HOLE_ENTRANCE caller, which passes 3.0 instead).
+func _reveal_boss_camera_lock(boss: Node, zoom_level: Vector2 = Vector2(3.5, 3.5)) -> void:
 	if not boss or not is_instance_valid(boss):
 		return
 	GameData.boss_zoom_active = true
+	GameData.boss_zoom_level = zoom_level
 	GameData.camera_locked = true
 	if boss.has_method("get_camera_bounds"):
 		GameData.camera_bounds = boss.get_camera_bounds()

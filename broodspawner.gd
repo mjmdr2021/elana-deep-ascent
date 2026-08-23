@@ -76,7 +76,13 @@ const WEBFLOOR_HAZARD_NAMES: Array[String] = ["webFloor1", "webFloor2", "webFloo
 const WEBBRIDGE_HAZARD_NAMES: Array[String] = ["webBridge1", "webBridge2", "webBridge3", "webBridge4"]
 
 @export var max_hp: int = 1200
-@export var defense: int = 50
+# 2026-08-23, user request: "broodspawner, 150 armor" -- was 50.
+@export var defense: int = 150
+# Behind-the-back weak spot (2026-08-23, user request: "weakspot is behind
+# of broodspawner. make it 20 armor") -- a real separate hittable zone (the
+# "Weakspot" node in broodspawner.tscn, see broodspawner_weakspot.gd and
+# apply_weakspot_damage() below), not a modifier on the normal Hurtbox.
+@export var weakspot_defense: int = 20
 @export var xp_reward: int = 300
 # Bulwark's reflect code (elana.gd's take_damage()) assumes every member of
 # the "enemies" group has this, since every base_enemy.gd-derived enemy
@@ -482,6 +488,13 @@ var gravity: float = ProjectSettings.get_setting("physics/2d/default_gravity")
 # call below works completely unchanged.
 @onready var _color_rect: Polygon2D = $CollisionPolygon2D/Polygon2D
 @onready var _body_shape: CollisionPolygon2D = $CollisionPolygon2D
+# Front/back hit zones (2026-08-23, see weakspot_defense's own comment) --
+# the old single whole-body Hurtbox was split into two 180-wide halves,
+# _hurtbox now covering only the front half. Both need mirroring in
+# _update_facing() now that they're asymmetric (the old single Hurtbox
+# never needed it, being centered and symmetric across her whole body).
+@onready var _hurtbox: Area2D = $Hurtbox
+@onready var _weakspot: Node2D = $Weakspot
 @onready var _venom_bite_zone: Area2D = $VenomBiteZone
 @onready var _leg_pierce_zone: Area2D = $LegPierceZone
 # Trigger zones (2026-08-22, user request: "add a triggerzone for the
@@ -515,6 +528,7 @@ func _ready() -> void:
 	_origin_position = global_position
 	_spit_timer = spit_interval
 	_floor_egg_timer = floor_egg_interval
+	_weakspot.boss_ref = self
 	_spawn_anchors()
 	if _arena_box != null:
 		_arena_box.body_entered.connect(_on_arena_box_body_entered)
@@ -918,6 +932,20 @@ func _update_facing() -> void:
 	_venom_bite_zone.position.x = abs(_venom_bite_zone.position.x) * direction
 	_leg_pierce_zone.scale.x = direction
 	_leg_pierce_zone.position.x = abs(_leg_pierce_zone.position.x) * direction
+	# Front/back hit zones (2026-08-23, see weakspot_defense's own comment)
+	# -- unlike the old single whole-body Hurtbox, these two are asymmetric
+	# now (front half / back half), so which side is "front" has to
+	# actually track her facing. Both nodes sit at a fixed, centered root
+	# position (0,-116), same as the trigger zones below, so the
+	# abs()*direction line is a no-op safety match here too, not strictly
+	# needed -- scale.x alone correctly flips each one's own interior
+	# CollisionShape2D offset (front authored on the +x/right side, back on
+	# the -x/left side, matching the default direction=1 assumption both
+	# were authored under).
+	_hurtbox.scale.x = direction
+	_hurtbox.position.x = abs(_hurtbox.position.x) * direction
+	_weakspot.scale.x = direction
+	_weakspot.position.x = abs(_weakspot.position.x) * direction
 	# Trigger zones (2026-08-22, user request: "fix flip direction for
 	# triggerzones") -- same mirroring, same reason. They were authored
 	# centered/symmetric so this didn't matter at first, but the user's own
@@ -1459,8 +1487,13 @@ func _nearby_bodies(radius: float) -> Array:
 # boss camera lock stuck on forever (2026-08-20 fix, found while
 # investigating the slide-on-hit bug above). Routes through the exact same
 # on_hit()/apply_boss_damage()/_die() pipeline every other hit uses.
-func on_plunge_hit(_attacker: Node, hit_direction: int, damage: int) -> bool:
-	on_hit(hit_direction, damage)
+# 2026-08-23 fix, found while adding the behind-the-back weak spot: this
+# used to drop the attacker reference entirely (_attacker prefixed unused,
+# never forwarded), so on_hit()'s new front/back check always saw
+# attacker == null for a plunge and silently fell back to normal defense
+# no matter where Elana actually landed the plunge from.
+func on_plunge_hit(attacker: Node, hit_direction: int, damage: int) -> bool:
+	on_hit(hit_direction, damage, false, attacker)
 	return true
 
 func apply_boss_damage(damage: int) -> void:
@@ -1487,6 +1520,19 @@ func on_hit(_hit_direction: int, damage: int, _is_magic: bool = false, _attacker
 
 func on_elemental_hit(_element: String, hit_direction: int, damage: int, attacker: Node = null) -> void:
 	on_hit(hit_direction, damage, true, attacker)
+
+# Behind-the-back weak spot (2026-08-23, user request: "weakspot is behind
+# of broodspawner. make it 20 armor" -- rebuilt as a real scene-authored
+# zone after "did u create a collision zone for the behind weakness?", see
+# broodspawner_weakspot.gd and the Weakspot node in broodspawner.tscn).
+# Called by that node's own on_hit()/on_elemental_hit() whenever a hit
+# actually lands on its separate Hurtbox -- same shared hp pool as
+# on_hit() above, just weakspot_defense instead of defense.
+func apply_weakspot_damage(damage: int) -> void:
+	if hp <= 0:
+		return
+	var final_damage = GameData.calc_damage(float(damage), float(weakspot_defense))
+	apply_boss_damage(final_damage)
 
 func _die() -> void:
 	GameData.mark_removed(get_tree().current_scene.scene_file_path, name)

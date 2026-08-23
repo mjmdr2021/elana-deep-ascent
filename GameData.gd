@@ -329,11 +329,20 @@ const ELEMENTAL_GOLEM_RESIST_BONUS: float = 0.10
 const SHOCK_STUN_DURATION: float = 0.7
 var dev_no_cooldowns = false  # Dev toggle — forces every cooldown to stay at 0 while on
 var dev_fixed_zoom_1x = false  # Dev toggle — locks camera to 1x zoom instead of the dynamic system
+var dev_fixed_zoom_0_1x = false  # Dev toggle (2026-08-22) — locks camera to 0.1x zoom, a very wide debug view
 var screen_shake_enabled = true  # Dev toggle — heavy hits/impacts shake the camera
 # Overrides the normal per-action camera zoom to a fixed wide arena view once
 # set — no auto-clear; reset_boss_camera() (called on boss death or player
 # respawn) turns it off.
 var boss_zoom_active: bool = false
+# Which zoom level boss_zoom_active eases toward (elana.gd's
+# _update_camera_lock() reads this instead of a hardcoded constant) --
+# defaults to Hollowfang's original 3.5, per-boss overridable (2026-08-22,
+# user request: "for boss2hole make it 3 zoom for camera") -- set by
+# dialog_marker.gd right before each boss-entrance cutscene flips
+# boss_zoom_active on, so a later encounter always gets its own intended
+# level instead of inheriting whatever a previous one last left behind.
+var boss_zoom_level: Vector2 = Vector2(3.5, 3.5)
 # True while the camera should stay clamped to camera_bounds instead of
 # following Elana without limit (elana.gd reads this every frame — see
 # _update_camera_lock()) — set alongside boss_zoom_active by the boss-arena

@@ -1382,9 +1382,14 @@ func _update_sprite(delta: float) -> void:
 	if _sprite.animation != anim:
 		_sprite.play(anim)
 
-const BOSS_ZOOM: Vector2 = Vector2(3.5, 3.5)
-
 func _update_camera_zoom(delta: float) -> void:
+	# Checked first (2026-08-22) -- the two dev fixed-zoom toggles are mutually
+	# exclusive (hud.gd's toggle handlers turn the other off), but ordering
+	# it ahead of dev_fixed_zoom_1x below costs nothing and avoids relying on
+	# that alone if that ever changes.
+	if GameData.dev_fixed_zoom_0_1x:
+		$Camera.zoom = $Camera.zoom.lerp(Vector2(0.1, 0.1), 5.0 * delta)
+		return
 	if GameData.dev_fixed_zoom_1x:
 		$Camera.zoom = $Camera.zoom.lerp(Vector2(1.5, 1.5), 5.0 * delta)
 		return
@@ -1397,9 +1402,11 @@ func _update_camera_zoom(delta: float) -> void:
 	# (Boss1NormalEntrance()) deliberately leaves zoom untouched. Slower
 	# than the 5.0 rate every combat zoom pop above uses (those are meant to
 	# be quick, punchy reactions) — this is a one-shot cinematic zoom, so a
-	# gentler ease reads as smooth rather than snappy.
+	# gentler ease reads as smooth rather than snappy. GameData.boss_zoom_level
+	# (2026-08-22, was a hardcoded BOSS_ZOOM const here) -- per-boss
+	# overridable, see its own declaration comment.
 	if GameData.boss_zoom_active:
-		$Camera.zoom = $Camera.zoom.lerp(BOSS_ZOOM, 1.5 * delta)
+		$Camera.zoom = $Camera.zoom.lerp(GameData.boss_zoom_level, 1.5 * delta)
 		return
 	var zoom_active := false
 	if is_plunge_attacking:

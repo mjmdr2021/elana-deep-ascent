@@ -51,6 +51,7 @@ texture = ExtResource("1_wk1v7")
 13:3/0 = 0
 13:3/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
 13:3/0/custom_data_0 = "slippery"
+13:3/0/custom_data_2 = true
 1:5/0 = 0
 1:5/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
 1:5/0/custom_data_0 = "slippery"
