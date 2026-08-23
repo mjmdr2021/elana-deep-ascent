@@ -1213,11 +1213,11 @@ func _physics_process(delta):
 
 	if jump_buffer_timer > 0.0 and not is_stunned and web_wrap < WEB_WRAP_LOCK_THRESHOLD:
 		if is_on_floor() and not is_dodging and not _in_water:
-			velocity.y = JUMP_VELOCITY * GameData.jump_mult * jump_weight_factor
+			velocity.y = JUMP_VELOCITY * GameData.get_jump_mult() * jump_weight_factor
 			can_double_jump = true
 			jump_buffer_timer = 0.0
 		elif is_wall_sliding:
-			velocity.y = JUMP_VELOCITY * GameData.jump_mult * jump_weight_factor
+			velocity.y = JUMP_VELOCITY * GameData.get_jump_mult() * jump_weight_factor
 			if not _has_stair_corner():
 				velocity.x = get_wall_normal().x * WALL_JUMP_PUSH
 				facing = int(sign(get_wall_normal().x))
@@ -1232,10 +1232,10 @@ func _physics_process(delta):
 			# Shorter than a regular jump (SURFACE_JUMP_MULT), and requires
 			# solid ground/wall within reach — treading water in open water
 			# with nothing nearby doesn't let her hop out.
-			velocity.y = JUMP_VELOCITY * SURFACE_JUMP_MULT * GameData.jump_mult * jump_weight_factor
+			velocity.y = JUMP_VELOCITY * SURFACE_JUMP_MULT * GameData.get_jump_mult() * jump_weight_factor
 			jump_buffer_timer = 0.0
 		elif not _in_water and GameData.double_jump_enabled and can_double_jump:
-			velocity.y = JUMP_VELOCITY * GameData.jump_mult * jump_weight_factor
+			velocity.y = JUMP_VELOCITY * GameData.get_jump_mult() * jump_weight_factor
 			can_double_jump = false
 			jump_buffer_timer = 0.0
 
@@ -1592,6 +1592,13 @@ func _tick_passives(delta: float) -> void:
 				GameData.passive_shield_hp = min(float(GameData.max_hp), _overheal_shield_hp + _iron_body_shield_hp)
 			new_hp = GameData.max_hp
 		GameData.hp = min(GameData.max_hp, new_hp)
+	# Voltangler mini-boss reward (2026-08-23) -- 1% max_hp/sec while
+	# touching water, permanent once he's been defeated. Plain additive
+	# heal capped at max_hp, no overheal spillover -- simpler than the
+	# regen block above on purpose, matches the user's own flat framing
+	# ("elana can heal 1% per second max hp when touching water").
+	if GameData.voltangler_defeated and _in_water and GameData.hp > 0:
+		GameData.hp = min(GameData.max_hp, GameData.hp + GameData.max_hp * GameData.VOLTANGLER_WATER_HEAL_PCT_PER_SEC * delta)
 	# Hollowscale outline — hugs the sprite's silhouette, shown only while the
 	# ward is charged and ready
 	if _sprite_effects_material != null:

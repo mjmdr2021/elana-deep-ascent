@@ -70,6 +70,8 @@ var reset_cooldowns_button: Button
 var fixed_zoom_button: Button
 var fixed_zoom_0_1x_button: Button
 var screen_shake_button: Button
+var voltangler_buff_button: Button
+var cobblecroak_buff_button: Button
 var item_use_cooldown = 0.0
 var _stat_labels: Dictionary = {}
 var hovered_inventory_slot: int = -1
@@ -655,6 +657,16 @@ func _setup_toggles():
 		Vector2(10, 930), _on_fixed_zoom_0_1x_toggled)
 	canvas.add_child(fixed_zoom_0_1x_button)
 
+	voltangler_buff_button = _make_toggle_button(
+		"Voltangler Buff: ON" if GameData.voltangler_defeated else "Voltangler Buff: OFF",
+		Vector2(10, 970), _on_voltangler_buff_toggled)
+	canvas.add_child(voltangler_buff_button)
+
+	cobblecroak_buff_button = _make_toggle_button(
+		"Cobblecroak Buff: ON" if GameData.cobblecroak_defeated else "Cobblecroak Buff: OFF",
+		Vector2(10, 1010), _on_cobblecroak_buff_toggled)
+	canvas.add_child(cobblecroak_buff_button)
+
 func _on_give_respecs():
 	GameData.add_item("respecElana")
 	GameData.add_item("respecGlint")
@@ -750,6 +762,19 @@ func _on_danger_sense_toggled():
 func _on_ant_queen_buff_toggled():
 	GameData.ant_queen_defeated = not GameData.ant_queen_defeated
 	ant_queen_buff_button.text = "Ant Queen Buff: ON" if GameData.ant_queen_defeated else "Ant Queen Buff: OFF"
+
+# Voltangler's death reward — 1% max_hp/sec passive heal while touching
+# water — see elana.gd's _tick_passives() and GameData.voltangler_defeated's
+# own comment. Same dev-toggle pattern as the other boss blessings above.
+func _on_voltangler_buff_toggled():
+	GameData.voltangler_defeated = not GameData.voltangler_defeated
+	voltangler_buff_button.text = "Voltangler Buff: ON" if GameData.voltangler_defeated else "Voltangler Buff: OFF"
+
+# Cobblecroak's death reward — permanent jump height increase — see
+# GameData.cobblecroak_defeated / get_jump_mult()'s own comments.
+func _on_cobblecroak_buff_toggled():
+	GameData.cobblecroak_defeated = not GameData.cobblecroak_defeated
+	cobblecroak_buff_button.text = "Cobblecroak Buff: ON" if GameData.cobblecroak_defeated else "Cobblecroak Buff: OFF"
 
 func _on_reset_cooldowns_toggled():
 	GameData.dev_no_cooldowns = not GameData.dev_no_cooldowns

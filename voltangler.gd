@@ -272,6 +272,13 @@ func _hide_lantern() -> void:
 # you add log when lantern is broken") -- this is the exact, only moment
 # regen permanently stops, so the timestamp/hp-at-the-time here directly
 # answers "when."
+# Generic death hook hit_handler.gd's own _die() already calls on any enemy
+# that implements it (2026-08-23) -- sets the permanent boss-reward flag
+# (see GameData.voltangler_defeated's own comment), same pattern
+# ant_queen.gd/elemental_golem.gd already use for their own rewards.
+func on_death() -> void:
+	GameData.voltangler_defeated = true
+
 func on_lantern_destroyed() -> void:
 	_lantern_destroyed = true
 	print("[Voltangler] LANTERN DESTROYED at hp=%.0f/%d — regen permanently disabled" % [hp, max_hp])

@@ -307,7 +307,15 @@ var elemander_pads_unlocked = false  # Blessing #2 — indefinite wall stick
 var golden_cloak_unlocked = false  # Sanctuary secret — floating descent while holding jump
 var hollowscale_unlocked = false  # Blessing #1 — +armor, one-hit ward on a flat cooldown
 var hollowscale_cooldown: float = 0.0
-const HOLLOWSCALE_ARMOR_BONUS: int = 15
+# +15% of her own base defense (2026-08-23, user explicit: "change reward
+# of hollowscale to be not flat 15. but +15% of armor") -- was a flat +15.
+# Percentage of BASE defense only (not the bonus itself), see get_defense()
+# below, so this can't self-reference. Real consequence worth flagging: at
+# low armor (e.g. fresh level 1, defense=0) this now grants nothing at all,
+# unlike the old flat +15 which always helped regardless of level -- it
+# only becomes meaningful once real armor (from leveling, see gain_xp())
+# has accumulated.
+const HOLLOWSCALE_ARMOR_BONUS_PCT: float = 0.15
 const HOLLOWSCALE_RECHARGE: float = 10.0
 # Ant Queen mini-boss reward — halves incoming damage from anything tagged
 # "hazards" (see elana.gd's take_damage()). Not part of the mandatory-boss
@@ -321,6 +329,31 @@ const HAZARD_DAMAGE_REDUCTION: float = 0.5
 # so this can't collide with or get overwritten by that clamp.
 var elemental_golem_defeated: bool = false
 const ELEMENTAL_GOLEM_RESIST_BONUS: float = 0.10
+# Voltangler mini-boss reward -- permanent passive heal while touching
+# water (see elana.gd's _tick_passives()), 2026-08-23 user explicit: "if
+# killed. apply buff to elana like any other buff, healing while on water.
+# elana can heal 1% per second max hp when touching water." Set on his
+# own on_death() (see voltangler.gd), same generic hook pattern every
+# other boss-reward flag here uses.
+var voltangler_defeated: bool = false
+const VOLTANGLER_WATER_HEAL_PCT_PER_SEC: float = 0.01
+# Cobblecroak mini-boss reward -- permanent jump height increase
+# (2026-08-23, user explicit, after two earlier reward ideas were
+# abandoned: "just have reward to be added max jump height"). A separate
+# additive bonus folded in by get_jump_mult() below, same "don't write
+# directly into the skill-tree-owned stat" pattern
+# ELEMENTAL_GOLEM_RESIST_BONUS/get_elemental_resist_for() already uses for
+# elemental_resist -- jump_mult itself is still purely the skill tree's own
+# value (real skill nodes add +0.10 to it directly), this can't collide
+# with or get overwritten by that. Set in cobblecroak.gd's own _die() (no
+# shared hit_handler.gd/on_death() hook the way Voltangler has -- he
+# extends CharacterBody2D directly like Broodspawner and dies via his own
+# _die()).
+var cobblecroak_defeated: bool = false
+# Bumped 0.15 -> 0.5 (2026-08-23, user: "the jump height is negligible. how
+# much did u add" -> "bump. like 50%") -- a real, clearly noticeable ~50%
+# taller jump now instead of a barely-felt 15%.
+const COBBLECROAK_JUMP_MULT_BONUS: float = 0.5
 # Single source of truth for how long Elana's "shocked" status (elana.gd's
 # apply_shock() — input blocked, momentum NOT zeroed, unlike stun/freeze)
 # lasts, shared by every electric source instead of each keeping its own
@@ -786,16 +819,19 @@ func gain_xp(amount: int) -> void:
 		sp += 2
 		glint_sp += 2
 		max_hp += 5
+		defense += 5
 		hp = max_hp
 
 # Dev cheat — jumps straight to level 100, granting the same per-level
-# rewards gain_xp() would (SP/max_hp), without looping through actual XP.
+# rewards gain_xp() would (SP/max_hp/defense), without looping through
+# actual XP.
 func dev_set_max_level() -> void:
 	while level < 100:
 		level += 1
 		sp += 2
 		glint_sp += 2
 		max_hp += 5
+		defense += 5
 	xp = 0
 	hp = max_hp
 
@@ -811,6 +847,7 @@ func dev_reset_to_level_1() -> void:
 	xp = 0
 	max_hp = 100
 	hp = 100
+	defense = 0
 	sp = 0
 	glint_sp = 0
 	skill_tree_levels.clear()
@@ -826,7 +863,10 @@ func get_attack_damage() -> int:
 # the matching herb grants a flat baseline + its Potency skill scaling — the
 # "same-element = reduced" rule established for Elemander, made real here.
 func get_defense() -> int:
-	return defense + (HOLLOWSCALE_ARMOR_BONUS if hollowscale_unlocked else 0)
+	return defense + (int(defense * HOLLOWSCALE_ARMOR_BONUS_PCT) if hollowscale_unlocked else 0)
+
+func get_jump_mult() -> float:
+	return jump_mult + (COBBLECROAK_JUMP_MULT_BONUS if cobblecroak_defeated else 0.0)
 
 func get_elemental_resist_for(element: String) -> float:
 	var resist = elemental_resist + (ELEMENTAL_GOLEM_RESIST_BONUS if elemental_golem_defeated else 0.0)
@@ -1038,6 +1078,8 @@ func reset() -> void:
 	golden_cloak_unlocked = false
 	ant_queen_defeated = false
 	elemental_golem_defeated = false
+	voltangler_defeated = false
+	cobblecroak_defeated = false
 	hollowscale_unlocked = false
 	hollowscale_cooldown = 0.0
 	danger_sense_unlocked = false
@@ -1081,6 +1123,8 @@ func save_game() -> void:
 		"hollowscale_unlocked": hollowscale_unlocked,
 		"ant_queen_defeated": ant_queen_defeated,
 		"elemental_golem_defeated": elemental_golem_defeated,
+		"voltangler_defeated": voltangler_defeated,
+		"cobblecroak_defeated": cobblecroak_defeated,
 		"danger_sense_unlocked": danger_sense_unlocked,
 		"spawn_point_id": spawn_point_id, "respawn_scene": respawn_scene,
 		"respawn_position": [respawn_position.x, respawn_position.y],
@@ -1134,6 +1178,8 @@ func load_game() -> bool:
 	hollowscale_unlocked = parsed.get("hollowscale_unlocked", hollowscale_unlocked)
 	ant_queen_defeated = parsed.get("ant_queen_defeated", ant_queen_defeated)
 	elemental_golem_defeated = parsed.get("elemental_golem_defeated", elemental_golem_defeated)
+	voltangler_defeated = parsed.get("voltangler_defeated", voltangler_defeated)
+	cobblecroak_defeated = parsed.get("cobblecroak_defeated", cobblecroak_defeated)
 	danger_sense_unlocked = parsed.get("danger_sense_unlocked", danger_sense_unlocked)
 	spawn_point_id = parsed.get("spawn_point_id", spawn_point_id)
 	respawn_scene = parsed.get("respawn_scene", respawn_scene)

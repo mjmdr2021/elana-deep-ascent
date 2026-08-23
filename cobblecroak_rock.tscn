@@ -1,0 +1,16 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://cobblecroak_rock.gd" id="1_rock"]
+[ext_resource type="Texture2D" uid="uid://dhemrhmuv7msl" path="res://spike.png" id="2_spike"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_rock"]
+radius = 12.0
+
+[node name="CobblecroakRock" type="Area2D" unique_id=4001200101]
+script = ExtResource("1_rock")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=4001200102]
+shape = SubResource("CircleShape2D_rock")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=4001200103]
+texture = ExtResource("2_spike")
