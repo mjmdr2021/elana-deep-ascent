@@ -201,10 +201,18 @@ func _on_area_entered(area: Area2D) -> void:
 			GameData.check_weapon_depletion()
 			# Generic hook — the hit above still lands (Shield-bearer's own
 			# modify_incoming_damage() already reduces it if blocked), but a
-			# target can refuse to actually be grappled/pulled in.
+			# target can refuse to actually be grappled/pulled in. Reversed
+			# instead of just cancelling (2026-08-24, user explicit: "cant
+			# pull bat. elana will be pulled to it" -- confirmed as the
+			# correct general behavior, not bat-specific): reuses the exact
+			# same grapple-to-wall mechanic below for when the hook hits
+			# terrain instead of an enemy, just anchored at the boss's own
+			# Hurtbox position instead of a wall.
 			if target.has_method("blocks_chain_pull") and target.blocks_chain_pull():
-				_clear_remaining_segments()
-				queue_free()
+				source._grapple_direction = direction
+				source._grapple_timer = _compute_grapple_timer(global_position)
+				_retracting = true
+				$Head.visible = false
 				return
 			_pull_target = target
 			_pulling = true

@@ -942,6 +942,14 @@ func _clear_weapon_state() -> void:
 func cancel_ore() -> void:
 	_clear_weapon_state()
 
+# Public wrapper (2026-08-24) -- _clear_weapon_state() itself was only ever
+# called from inside this file (cancel_ore()/check_weapon_depletion()), a
+# real "internal" boundary worth keeping rather than reaching past. Wyrmbat's
+# Shriek Wave is the first external caller, forcing Elana back to fist mid-
+# fight.
+func force_unequip_weapon() -> void:
+	_clear_weapon_state()
+
 func cancel_herb() -> void:
 	if active_herb != null:
 		active_herb.remove_effect()
@@ -1114,7 +1122,7 @@ func has_save_file() -> bool:
 func save_game() -> void:
 	var data := {
 		"level": level, "xp": xp, "sp": sp, "glint_sp": glint_sp,
-		"hp": hp,
+		"hp": hp, "defense": defense,
 		"inventory_slots": inventory_slots, "quickslot_slots": quickslot_slots,
 		"skill_tree_levels": skill_tree_levels, "glint_skill_tree_levels": glint_skill_tree_levels,
 		"air_dash_enabled": air_dash_enabled,
@@ -1166,6 +1174,11 @@ func load_game() -> bool:
 
 	level = parsed.get("level", level)
 	xp = parsed.get("xp", xp)
+	# 2026-08-25, real bug found via code review: gain_xp()/dev_set_max_level()
+	# grant +5 defense per level, but this key was never saved/restored --
+	# every other progression stat round-tripped correctly except this one,
+	# silently resetting earned defense to 0 on every reload.
+	defense = parsed.get("defense", defense)
 	sp = parsed.get("sp", sp)
 	glint_sp = parsed.get("glint_sp", glint_sp)
 	inventory_slots = parsed.get("inventory_slots", inventory_slots)

@@ -26,11 +26,19 @@ var hp = 30
 var original_color: Color
 var _flash_material: ShaderMaterial = null
 const ORE_PIECE = preload("res://ore_piece.tscn")
+# Cosmetic hop, triggered externally (2026-08-24, user: "make ores also
+# jump on the wave from judgement") -- Graniteus's Mountain Judgement calls
+# bounce() on any nearby ore node as its earth-mound wave passes through.
+const BOUNCE_HEIGHT: float = 10.0
+const BOUNCE_TIME: float = 0.15
+var _sprite_rest_y: float = 0.0
+var _bounce_tween: Tween = null
 
 func _ready():
 	if GameData.is_removed(get_tree().current_scene.scene_file_path, name):
 		queue_free()
 		return
+	add_to_group("ore_nodes")
 	# Rolled once (cached in GameData, keyed by scene+node name) rather than
 	# every time this node's _ready() runs — otherwise re-entering the room
 	# would silently re-roll a different ore type each visit within the same
@@ -41,6 +49,7 @@ func _ready():
 	original_color = $ColorRect.color
 	var sprite = get_node_or_null("Sprite2D")
 	if sprite:
+		_sprite_rest_y = sprite.position.y
 		_flash_material = ShaderMaterial.new()
 		_flash_material.shader = preload("res://hit_flash.gdshader")
 		sprite.material = _flash_material
@@ -86,6 +95,25 @@ func _on_threshold_reached() -> void:
 	GameData.mark_removed(get_tree().current_scene.scene_file_path, name)
 	drop_ores()
 	queue_free()
+
+# Purely cosmetic -- bounces the sprite up and back down, no gameplay
+# effect. Animated via position, never scale, same "never scale sprites"
+# rule the earth mound's own rise/recede already follows. Kills any
+# in-flight bounce first and always tweens relative to the cached
+# _sprite_rest_y (not the sprite's current position) -- several nearby
+# earth mounds can each call this in quick succession as Mountain
+# Judgement's wave passes through, and reading position.y fresh mid-bounce
+# would let it drift further from rest with each overlapping call.
+func bounce() -> void:
+	var sprite = get_node_or_null("Sprite2D")
+	if sprite == null:
+		return
+	if _bounce_tween != null and _bounce_tween.is_valid():
+		_bounce_tween.kill()
+	sprite.position.y = _sprite_rest_y
+	_bounce_tween = create_tween()
+	_bounce_tween.tween_property(sprite, "position:y", _sprite_rest_y - BOUNCE_HEIGHT, BOUNCE_TIME * 0.5)
+	_bounce_tween.tween_property(sprite, "position:y", _sprite_rest_y, BOUNCE_TIME * 0.5)
 
 func drop_ores():
 	var item_id: String = ORE_TYPE_IDS[ore_type]

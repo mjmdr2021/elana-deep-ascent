@@ -28,14 +28,30 @@ const SUNKEN_OFFSET: float = 20.0  # world px below resting height it starts/end
 @export var knockup: float = -220.0
 @export var knockback_x: float = 80.0
 @export var away_direction: int = 1  # which way to push Elana horizontally on hit
+# Per-instance hitbox override -- defaults match the scene's own baked-in
+# CircleShape2D exactly, so elemental_golem.gd's Ground Slam (which never
+# sets these) is completely unaffected. Graniteus's Mountain Judgement sets
+# both bigger/lower on the mounds it spawns (2026-08-24, user: "make
+# collision of wave a bit lower and bigger").
+@export var hit_radius: float = 18.0
+@export var hit_vertical_offset: float = 0.0
 
 @onready var _sprite: Sprite2D = $Sprite2D
+@onready var _collision_shape: CollisionShape2D = $CollisionShape2D
 var _rest_y: float
 var _hit_player: bool = false
 
 func _ready() -> void:
 	_rest_y = _sprite.position.y
 	_sprite.position.y = _rest_y + SUNKEN_OFFSET
+	# Duplicated, not mutated in place -- the CircleShape2D sub-resource is
+	# shared across every instance of this packed scene by default, so
+	# resizing it directly would silently resize every other currently-alive
+	# mound too (including Ground Slam's, spawned from the same scene).
+	var shape: CircleShape2D = _collision_shape.shape.duplicate()
+	shape.radius = hit_radius
+	_collision_shape.shape = shape
+	_collision_shape.position.y = hit_vertical_offset
 	_animate()
 
 func _animate() -> void:

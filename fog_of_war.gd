@@ -144,6 +144,11 @@ var _mask_dirty: bool = false
 @onready var _boot_cover: CanvasLayer = $BootCover
 
 func _ready() -> void:
+	# Lookup group (2026-08-24) -- lets anything (Wyrmbat's Blackout Canopy,
+	# so far) find and mutate elana_reveal_radius live, same
+	# get_tree().get_first_node_in_group() convention every other cross-
+	# script lookup in this codebase already uses. Harmless if unused.
+	add_to_group("fog_of_war")
 	# First TileMap sibling — not hardcoded to the name "Terrain" so this
 	# still works if a scene names/nests it differently.
 	for sibling in get_parent().get_children():

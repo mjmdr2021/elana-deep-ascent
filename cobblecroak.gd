@@ -413,11 +413,16 @@ func _tick_attack_rotation(_delta: float) -> void:
 		return
 	if target == null:
 		return
+	# 2026-08-24, user: "only make Cobblecroak attack if elana is in its
+	# arena" -- AggroZone (what actually sets target) can be a wider/
+	# differently-shaped range than the real arena, so being aggro'd alone
+	# isn't enough once arena_bounds_path is wired. Falls back to the old
+	# aggro-only behavior if it isn't (same graceful-degradation convention
+	# every other arena_bounds_path usage in this file already follows).
+	if _arena_bounds != null and not _get_arena_rect().has_point(target.global_position):
+		return
 	var attack: int = ATTACK_ROTATION[_rotation_index]
 	_rotation_index = (_rotation_index + 1) % ATTACK_ROTATION.size()
-	# TEMP DEBUG (2026-08-23) -- Croak was reported as never coming up in
-	# the rotation. Logging exactly what index/attack gets picked each time.
-	print("[Cobblecroak DEBUG] rotation picked index=%s attack=%s croak_enabled=%s" % [_rotation_index, attack, croak_enabled])
 	match attack:
 		Attack.LEAP_DROP:
 			if leap_drop_enabled:
@@ -471,7 +476,15 @@ func _apply_leap_landing_impact(leap_distance: float) -> void:
 	# actually hitting Elana below (a slam this size should shake the screen
 	# even if she's out of range/dodged it).
 	_shake_player_camera(0.5)
-	var knockup: float = clamp(leap_drop_landing_knockup_base + leap_drop_landing_knockup_reduction_per_distance * leap_distance, leap_drop_landing_knockup_min, leap_drop_landing_knockup_base)
+	# 2026-08-25, real bug found via code review: clamp()'s min/max args were
+	# passed as (leap_drop_landing_knockup_min, leap_drop_landing_knockup_base)
+	# -- min=-150 is numerically GREATER than max=-550, inverting the whole
+	# distance-falloff curve (a close-range landing, meant to be full-strength
+	# -550, clamped down to the weak -150 instead, and vice versa for a long
+	# leap). base is the true numeric minimum (most negative/strongest); min
+	# is the true numeric maximum (least negative/weakest) -- swapped here to
+	# match.
+	var knockup: float = clamp(leap_drop_landing_knockup_base + leap_drop_landing_knockup_reduction_per_distance * leap_distance, leap_drop_landing_knockup_base, leap_drop_landing_knockup_min)
 	for body in _nearby_bodies(leap_drop_landing_radius):
 		# Only lands if Elana's actually grounded at the moment of impact
 		# (2026-08-23, user explicit: "only apply the knockup dmg and knock
@@ -679,10 +692,6 @@ func _do_croak() -> void:
 	var elapsed: float = 0.0
 	var pulse_timer: float = 0.0
 	var rock_timer: float = 0.0
-	# TEMP DEBUG (2026-08-23) -- Croak was reported as "not triggering"
-	# despite the rotation confirmed picking it -- checking whether the
-	# loop actually keeps running (indefinitely now) or exits immediately.
-	print("[Cobblecroak DEBUG] croak STARTED hp=%s max_hp=%s ratio=%s threshold=%s" % [hp, max_hp, float(hp) / float(max_hp), hibernate_hp_threshold_pct])
 	while is_instance_valid(self) and not _croak_interrupted \
 			and _croak_damage_taken < croak_damage_threshold \
 			and float(hp) / float(max_hp) > hibernate_hp_threshold_pct:
@@ -699,7 +708,6 @@ func _do_croak() -> void:
 			var rock_count: int = 1 + int(elapsed / croak_rock_count_growth_interval)
 			for _i in rock_count:
 				_spawn_rock(global_position)
-	print("[Cobblecroak DEBUG] croak ENDED elapsed=%s interrupted=%s" % [elapsed, _croak_interrupted])
 	_is_croaking = false
 	if is_instance_valid(self):
 		_body_visual.color = original_color
@@ -778,6 +786,19 @@ func _start_rain_of_rocks(center: Vector2, duration: float) -> void:
 # (2026-08-23, user explicit: "spawn the rocks on the top of the arena
 # inside it") rather than a flat rain_of_rocks_spawn_height offset above
 # wherever the triggering attack happened.
+# Used by _tick_attack_rotation()'s arena-gate (2026-08-24) -- same shape
+# _spawn_rock() below already reads inline for Rain of Rocks, pulled out
+# into a reusable helper.
+func _get_arena_rect() -> Rect2:
+	if _arena_bounds == null:
+		return Rect2()
+	var shape_node: CollisionShape2D = _arena_bounds.get_node_or_null("CollisionShape2D")
+	if shape_node == null or not (shape_node.shape is RectangleShape2D):
+		return Rect2()
+	var rect: RectangleShape2D = shape_node.shape
+	var center: Vector2 = _arena_bounds.global_position + shape_node.position
+	return Rect2(center - rect.size / 2.0, rect.size)
+
 func _spawn_rock(center: Vector2) -> void:
 	var rock = ROCK_SCENE.instantiate()
 	var spawn_x: float = center.x + randf_range(-rain_of_rocks_radius, rain_of_rocks_radius)

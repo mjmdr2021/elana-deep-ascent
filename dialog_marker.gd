@@ -10,8 +10,10 @@ const DialogueData = preload("res://dialogue_data.gd")
 # cutscene type. boss2HoleEntranceCutScene"), not inserted between existing
 # entries -- GDScript enums serialize as plain integers in .tscn files
 # (cutscene_type = N), so reordering would silently reassign every already-
-# placed marker after the insertion point to the wrong type.
-enum CutsceneType { GLINT_SCOUT_TUTORIAL, CAMERA_PAN, BOSS1_DROP_ENTRANCE, AIR_DASH_TUTORIAL, BOSS2_HOLE_ENTRANCE }
+# placed marker after the insertion point to the wrong type. ZOOM_X1
+# (2026-08-24, user: "add cutscene, Zoomx1. sets zoom to x1") appended the
+# same way, for the same reason.
+enum CutsceneType { GLINT_SCOUT_TUTORIAL, CAMERA_PAN, BOSS1_DROP_ENTRANCE, AIR_DASH_TUTORIAL, BOSS2_HOLE_ENTRANCE, ZOOM_X1 }
 
 @export var cutscene_type: CutsceneType = CutsceneType.GLINT_SCOUT_TUTORIAL
 
@@ -39,8 +41,14 @@ const BOSS2_PAN_TARGET_OFFSET: Vector2 = Vector2(0, -150)
 # longer routes through BossCameraLock() at all (see Boss2HoleEntrance()'s
 # own pan+hold+pan-back sequence, which covers the same need on its own) --
 # kept here for whichever future boss without a real entrance sequence
-# calls BossCameraLock() directly instead.
-const FALLBACK_REVEAL_HOLD: float = 2.0
+# calls BossCameraLock() directly instead. Currently the ONLY caller that
+# ever actually reaches this fallback is ZOOM_X1 (Wyrmbat/Graniteus,
+# neither implements start_drop_push_sequence) -- bumped to 3.0s for that
+# specifically (2026-08-24, user: "mke the reveal hold for zoomx1 be 3
+# seconds"). If a future boss without a drop/push sequence also routes
+# through here, it'll inherit this same 3.0s -- revisit then if that's
+# ever wrong for it.
+const FALLBACK_REVEAL_HOLD: float = 3.0
 
 # "The cave shakes" beat, fired once the pan-back finishes — throws Elana
 # up and forward (in whichever direction she's currently facing) into the
@@ -111,6 +119,14 @@ func _on_body_entered(body: Node) -> void:
 			_start_air_dash_tutorial_cutscene(body)
 		CutsceneType.BOSS2_HOLE_ENTRANCE:
 			Boss2HoleEntrance(body)
+		CutsceneType.ZOOM_X1:
+			# Same shape as BOSS1_DROP_ENTRANCE (no one-time flag, safe against
+			# re-firing mid-sequence since GameData.in_cutscene freezes her for
+			# the whole BossCameraLock() run) -- just a plain zoom-lock reveal
+			# at 1.0x instead of the usual close-in boss zoom, no drop/push
+			# sequence (neither Wyrmbat nor Graniteus implement one, so this
+			# falls into BossCameraLock()'s immediate-reveal-then-hold branch).
+			BossCameraLock(body, Vector2(1.0, 1.0))
 
 func _start_scout_tutorial_cutscene(elana: Node) -> void:
 	GameData.in_cutscene = true
