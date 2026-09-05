@@ -35,7 +35,7 @@ extends CharacterBody2D
 @export var xp_reward: int = 250
 
 @export_group("Movement")
-@export var combat_fly_speed: float = 70.0
+@export var combat_fly_speed: float = 140.0  # 2026-08-25, user: "make speed of bat faster" (was 70)
 # Slow vertical sine bob while combat-flying (2026-08-24, user: "when
 # flying, do bobing up and down slowly") -- absolute-position based
 # (bob_base_y + sin(...)), not velocity-driven, so it can't drift over a
@@ -60,22 +60,62 @@ extends CharacterBody2D
 @export var arena_bounds_path: NodePath
 
 @export_group("Blackout Canopy")
-@export var blackout_canopy_enabled: bool = false  # 2026-08-24, user: disabled for now (isolating other attacks during testing)
+@export var blackout_canopy_enabled: bool = true  # re-enabled 2026-08-25, user: "lets enable it" (was temp-disabled 2026-08-24 for isolated testing)
 @export var blackout_canopy_cooldown: float = 45.0
 @export var blackout_canopy_swoop_duration: float = 1.5
 @export var blackout_canopy_effect_duration: float = 30.0
-# Elana's own fog_of_war.gd defaults elana_reveal_radius to 28 -- this is
-# what it gets forced down to for the effect's duration.
-@export var blackout_canopy_reveal_radius: float = 8.0
+# fog_of_war.gd's glint_erase_radius (Glint's own erase-mask radius, 56
+# default) gets forced down to this while the effect is active -- 2026-08-25,
+# user explicit: "dont reduce elanas eraser. only glints" -- Elana's own
+# separate brush_radius/elana_reveal_radius are never touched at all.
+# glint_erase_radius was split out of what used to be a single shared
+# brush_radius both Elana's own erase call and Glint's read from (real bug
+# found via user report: "is the blackout canopy reveal radius affecting
+# all erasers?" -- yes, confirmed, before the split).
+@export var blackout_canopy_reveal_radius: float = 25.0  # 2026-08-25, was 8 -- smaller than Elana's own untouched 28px radius, so Glint's contribution became negligible and the combined visible area collapsed to almost nothing ("erases so little")
+# How much Glint's own light dims/shrinks for the effect's duration --
+# 0.0 = fully off, 1.0 = no change. See _start_blackout_canopy_effect().
+@export var blackout_canopy_glint_dim_factor: float = 0.15
+# 2026-08-25, user explicit: "when canopy is active, only apply it on the
+# collisionshape i made you do. when elana is out of it, restore the glow.
+# as long as she touches it while canopy is active, reduce glow and
+# eraser." -- points at TwinsArenaFloorZone (full_map.tscn), a real Area2D
+# the user placed by hand. Reduced vision (Glint's dim + both fog radii)
+# now toggles live off her actual overlap with this zone, gated by whether
+# Blackout Canopy is currently active at all -- not a flat 30s apply/
+# restore like before. See _on_blackout_floor_zone_body_entered/exited().
+@export var blackout_canopy_floor_zone_path: NodePath
+# 2026-08-25, user explicit: "do the sweep on the floor area" -- the
+# horizontal dash now also dips her down to just above the real floor
+# (same downward-raycast technique _find_ceiling() already uses, just
+# aimed down instead of up) instead of staying at whatever height she was
+# combat-flying at, then rises back to that height once the dash lands
+# (user: "dip down to floor, then back up after").
+@export var blackout_canopy_floor_probe_range: float = 400.0
+@export var blackout_canopy_floor_offset: float = 40.0
+@export var blackout_canopy_rise_duration: float = 0.5
+# 2026-08-25, user revision: "dive straight down [that] sweeps the arena
+# til it hits the other end" -- was a diagonal dive (X+Y tweened together);
+# now two sequential phases instead: a straight vertical drop first (this
+# duration), THEN the horizontal sweep at floor height
+# (blackout_canopy_swoop_duration, unchanged meaning, now horizontal-only).
+@export var blackout_canopy_drop_duration: float = 0.4
+# 2026-08-25, user explicit: "only trigger the attack when at either edge
+# of the arena. so the swoop down would cover the whole bottom area." --
+# gates _try_start_attack()'s pick (see _is_at_arena_edge()) rather than
+# moving her to an edge first; her existing constant left-right combat-fly
+# patrol already sweeps edge to edge on its own, so this just waits for
+# that patrol to bring her there naturally instead of adding new movement.
+@export var blackout_canopy_edge_threshold: float = 20.0
 
 @export_group("Spike Tail")
-@export var spike_tail_enabled: bool = true
+@export var spike_tail_enabled: bool = false  # 2026-08-25, temp: disabled for isolated Blackout Canopy testing -- flip back to true when done
 @export var spike_tail_cooldown: float = 2.0  # 2026-08-24, user: increase frequency (was 4.0)
 @export var spike_tail_speed: float = 700.0
 @export var spike_tail_damage: int = 15
 
 @export_group("Shriek Wave")
-@export var shriek_wave_enabled: bool = true
+@export var shriek_wave_enabled: bool = false  # 2026-08-25, temp: disabled for isolated Blackout Canopy testing -- flip back to true when done
 @export var shriek_wave_cooldown: float = 12.0
 @export var shriek_wave_windup: float = 0.4
 # Purely cosmetic echo rings, played AFTER the disarm lands, not locking
@@ -95,7 +135,7 @@ extends CharacterBody2D
 @export var shriek_wave_min_damage: int = 5
 
 @export_group("King's Slumber")
-@export var kings_slumber_enabled: bool = true
+@export var kings_slumber_enabled: bool = false  # 2026-08-25, temp: disabled for isolated Blackout Canopy testing -- flip back to true when done
 @export var kings_slumber_cooldown: float = 40.0
 @export var kings_slumber_heal_pct_per_sec: float = 0.05
 @export var kings_slumber_duration: float = 10.0
@@ -107,6 +147,9 @@ extends CharacterBody2D
 
 const SPIKE_SCENE: PackedScene = preload("res://wyrmbat_tailspike.tscn")
 const SHRIEK_ECHO_SCENE: PackedScene = preload("res://wyrmbat_shriek_echo.tscn")
+const DASH_TRAIL_INTERVAL: float = 0.015  # 2026-08-25, user: "more tight knit" again (was 0.02, 0.03, 0.05)
+const FOG_TRAIL_RADIUS: float = 180.0  # was 160, 140, 100 -- now square (see add_fog_at()), so this is a half-width, not a circle radius
+const FOG_TRAIL_Y_OFFSET: float = 25.0  # 2026-08-25, user: "lower the fog paint path a bit"
 
 var hp: float
 var direction: int = 1
@@ -127,7 +170,7 @@ var stun_timer: float = 0.0
 
 var _blackout_canopy_cooldown_timer: float = 0.0
 var _blackout_canopy_active_timer: float = 0.0
-var _blackout_canopy_original_reveal_radius: float = 28.0
+var _blackout_canopy_original_brush_radius: float = 56.0  # Glint's own light -- see _apply_blackout_vision_reduction()/_restore_blackout_vision()
 var _spike_tail_cooldown_timer: float = 0.0
 var _shriek_wave_cooldown_timer: float = 0.0
 var _kings_slumber_cooldown_timer: float = 0.0
@@ -142,6 +185,11 @@ var _kings_slumber_cooldown_timer: float = 0.0
 @onready var _hurtbox: Area2D = $Hurtbox
 @onready var _boulder_redirect_zone: Area2D = $BoulderRedirectZone
 @onready var _arena_bounds: Node = get_node_or_null(arena_bounds_path)
+@onready var _blackout_floor_zone: Area2D = get_node_or_null(blackout_canopy_floor_zone_path)
+# 2026-08-25, user: "apply a violet overlay on the collision area so i know
+# if the canopy still active" -- a real ColorRect child of the zone itself
+# (full_map.tscn), toggled visible while _blackout_canopy_active_timer > 0.
+@onready var _blackout_zone_overlay: ColorRect = _blackout_floor_zone.get_node_or_null("ActiveOverlay") if _blackout_floor_zone != null else null
 
 func _ready() -> void:
 	if GameData.is_removed(get_tree().current_scene.scene_file_path, name):
@@ -152,6 +200,11 @@ func _ready() -> void:
 	hp = max_hp
 	original_color = _body_visual.color
 	_boulder_redirect_zone.area_entered.connect(_on_boulder_redirect_zone_area_entered)
+	if _blackout_floor_zone != null:
+		_blackout_floor_zone.body_entered.connect(_on_blackout_floor_zone_body_entered)
+		_blackout_floor_zone.body_exited.connect(_on_blackout_floor_zone_body_exited)
+	else:
+		push_warning("Wyrmbat: blackout_canopy_floor_zone_path not wired -- Blackout Canopy's reduced vision will never trigger.")
 	_find_ceiling()
 	# Starts already on cooldown -- every cooldown timer defaults to 0.0
 	# (ready), so without this, King's Slumber (2nd priority, right after
@@ -275,8 +328,14 @@ func _get_arena_x_range() -> Vector2:
 	var center: Vector2 = _arena_bounds.global_position + shape_node.position
 	return Vector2(center.x - rect.size.x / 2.0, center.x + rect.size.x / 2.0)
 
+func _is_at_arena_edge() -> bool:
+	var range: Vector2 = _get_arena_x_range()
+	if range.x == range.y:
+		return false  # arena not wired -- never "at an edge"
+	return abs(global_position.x - range.x) <= blackout_canopy_edge_threshold or abs(global_position.x - range.y) <= blackout_canopy_edge_threshold
+
 func _try_start_attack() -> bool:
-	if blackout_canopy_enabled and _blackout_canopy_cooldown_timer <= 0.0:
+	if blackout_canopy_enabled and _blackout_canopy_cooldown_timer <= 0.0 and _is_at_arena_edge():
 		_do_blackout_canopy()
 		return true
 	if kings_slumber_enabled and _kings_slumber_cooldown_timer <= 0.0:
@@ -331,33 +390,131 @@ func _find_ceiling() -> void:
 	var result := space.intersect_ray(query)
 	_ceiling_y = result.position.y + ceiling_rest_offset if result else global_position.y
 
+# Same downward-raycast technique as _find_ceiling() above, just aimed the
+# other direction -- used only by Blackout Canopy's floor-sweep dip.
+func _find_floor_y() -> float:
+	var space = get_world_2d().direct_space_state
+	var query := PhysicsRayQueryParameters2D.create(global_position, global_position + Vector2(0, blackout_canopy_floor_probe_range), 1)
+	query.exclude = [self.get_rid()]
+	var result := space.intersect_ray(query)
+	return result.position.y - blackout_canopy_floor_offset if result else global_position.y
+
 # ── Blackout Canopy ──────────────────────────────────────────────────────
 # Brief scripted swoop (locks her out via _is_attacking, same as every
 # other attack), THEN the actual 30s darkness effect runs independently
 # afterward -- she's free to act/fly/attack normally while it's active,
-# only the swoop itself is a real "attack" window.
+# only the swoop itself (dash + rise back up) is a real "attack" window.
+#
+# 2026-08-25, user revision: "dive straight down [that] sweeps the arena
+# til it hits the other end. then goes back up to its original flying
+# position." -- THREE sequential phases now (was a diagonal dive with X/Y
+# tweened together): (1) straight vertical drop to just above the real
+# floor (_find_floor_y()), (2) horizontal sweep across to the far edge at
+# that floor height (spawning the placeholder red trail the whole way),
+# (3) rise back up to wherever she started. Darkness starts the instant
+# phase 2 lands. Only triggers while she's already at an arena edge (see
+# _is_at_arena_edge(), gated in _try_start_attack()) -- her own left-right
+# combat-fly patrol already sweeps edge to edge, so target_x in phase 2
+# always ends up the FAR edge, meaning the sweep covers the whole arena
+# width, not just part of it.
 func _do_blackout_canopy() -> void:
 	_is_attacking = true
 	_blackout_canopy_cooldown_timer = blackout_canopy_cooldown
+	# 2026-08-25, real bug found (confirmed via debug logging -- her X
+	# position drifted during a Y-only tween phase): _apply_movement()
+	# early-returns the instant _is_attacking is true, so velocity is never
+	# touched/cleared for the whole sequence -- whatever she was
+	# combat-flying at leaks straight through move_and_slide()'s own
+	# unconditional per-frame call in _physics_process(), fighting every
+	# tween below. Zeroed here so the whole sequence is purely tween-driven.
+	velocity = Vector2.ZERO
 	var range: Vector2 = _get_arena_x_range()
 	var target_x: float = range.x if global_position.x > (range.x + range.y) / 2.0 else range.y
-	var tween := create_tween()
-	tween.tween_property(self, "global_position:x", target_x, blackout_canopy_swoop_duration)
-	await tween.finished
+	var start_y: float = global_position.y
+	var floor_y: float = _find_floor_y()
+	# Phase 1 -- straight down.
+	var drop_tween := create_tween()
+	drop_tween.tween_property(self, "global_position:y", floor_y, blackout_canopy_drop_duration)
+	await drop_tween.finished
 	if not is_instance_valid(self) or not is_inside_tree():
 		return
+	# 2026-08-25, user explicit: "apply the reduction on swoop. not after
+	# swoop." -- was called after Phase 2 finished, right before Phase 3's
+	# rise, so the zone-gated reduction (see _start_blackout_canopy_effect())
+	# never had a chance to trigger DURING the sweep itself even though
+	# that's exactly when she's flying through the floor zone. Moved here,
+	# right as the sweep begins, so entering the zone mid-sweep now
+	# correctly triggers it live instead of only after she's already done.
 	_start_blackout_canopy_effect()
+	# Phase 2 -- horizontal sweep at floor height, leaving a PERMANENT
+	# darkened fog trail behind her (2026-08-25, user: "instead of the red
+	# trail. its the darkness fog. the fog is permanent." -- replaces what
+	# was a placeholder red ColorRect trail with a real call into
+	# fog_of_war.gd's new add_fog_at(), the inverse of its normal erase
+	# brush). Not restored on effect end, unlike the reveal-radius shrink
+	# below -- this is a lasting scar on the map, by design.
+	#
+	# 2026-08-25, real bug found via debug logging (confirmed: the trail
+	# loop ran the correct number of iterations exactly as expected, then
+	# hung forever right after) -- this used to ALSO `await
+	# sweep_tween.finished` after the trail loop, on top of the loop itself
+	# already covering the same blackout_canopy_swoop_duration. A Tween's
+	# "finished" signal only fires ONCE, at the instant it completes --
+	# since both were tuned to the same duration, the tween was finishing
+	# (and firing "finished" to nobody, since nothing was listening yet)
+	# WHILE still inside the trail loop, not after. By the time execution
+	# reached `await sweep_tween.finished`, that one-shot signal had
+	# already fired and would never fire again, so the await hung forever.
+	# Fixed by simply not double-waiting -- the trail loop's own timing
+	# already guarantees the tween has had enough real time to finish, same
+	# pattern _do_mountain_judgement()'s rise-shake loop already uses (no
+	# redundant await on the terrain's own animation after its own timed
+	# loop either).
+	var sweep_tween := create_tween()
+	sweep_tween.tween_property(self, "global_position:x", target_x, blackout_canopy_swoop_duration)
+	var trail_elapsed: float = 0.0
+	while trail_elapsed < blackout_canopy_swoop_duration:
+		_add_fog_trail_at_current_position()
+		await get_tree().create_timer(DASH_TRAIL_INTERVAL).timeout
+		trail_elapsed += DASH_TRAIL_INTERVAL
+	if not is_instance_valid(self) or not is_inside_tree():
+		return
+	# Phase 3 -- rise back to her original flying height.
+	var rise_tween := create_tween()
+	rise_tween.tween_property(self, "global_position:y", start_y, blackout_canopy_rise_duration)
+	await rise_tween.finished
+	if not is_instance_valid(self) or not is_inside_tree():
+		return
 	_is_attacking = false
 
+# 2026-08-25, reworked per user: "when canopy is active, only apply it on
+# the collisionshape i made you do. when elana is out of it, restore the
+# glow. as long as she touches it while canopy is active, reduce glow and
+# eraser." -- reduced vision used to apply unconditionally for the whole
+# 30s the instant the effect started; now it only ever applies while she's
+# BOTH inside TwinsArenaFloorZone (full_map.tscn, a real Area2D) AND
+# Blackout Canopy is currently active, toggling live via that zone's own
+# body_entered/body_exited signals (see _on_blackout_floor_zone_body_
+# entered/exited() below). This function just captures the "before" values
+# once and starts the timer -- it no longer applies the reduction itself.
 func _start_blackout_canopy_effect() -> void:
 	var tree: SceneTree = get_tree()
 	if tree == null:
 		return
 	var fog = tree.get_first_node_in_group("fog_of_war")
-	if fog != null and fog.has_method("get") and "elana_reveal_radius" in fog:
-		_blackout_canopy_original_reveal_radius = fog.elana_reveal_radius
-		fog.elana_reveal_radius = blackout_canopy_reveal_radius
+	if fog != null and "glint_erase_radius" in fog:
+		_blackout_canopy_original_brush_radius = fog.glint_erase_radius
 	_blackout_canopy_active_timer = blackout_canopy_effect_duration
+	if _blackout_zone_overlay != null:
+		_blackout_zone_overlay.visible = true
+	# If she's already standing in the zone the instant darkness starts,
+	# apply immediately rather than waiting for a fresh body_entered signal
+	# that will never fire (she's not "entering," she's already there).
+	if _blackout_floor_zone != null:
+		for body in _blackout_floor_zone.get_overlapping_bodies():
+			if body.is_in_group("player"):
+				_apply_blackout_vision_reduction()
+				break
 
 func _tick_blackout_canopy(delta: float) -> void:
 	if _blackout_canopy_active_timer <= 0.0:
@@ -366,14 +523,59 @@ func _tick_blackout_canopy(delta: float) -> void:
 	if _blackout_canopy_active_timer <= 0.0:
 		_end_blackout_canopy()
 
-func _end_blackout_canopy() -> void:
-	_blackout_canopy_active_timer = 0.0
+# Fires only while Blackout Canopy is actually active -- the zone itself
+# exists/monitors regardless, this just ignores it outside that window.
+func _on_blackout_floor_zone_body_entered(body: Node) -> void:
+	if body.is_in_group("player") and _blackout_canopy_active_timer > 0.0:
+		_apply_blackout_vision_reduction()
+
+func _on_blackout_floor_zone_body_exited(body: Node) -> void:
+	if body.is_in_group("player") and _blackout_canopy_active_timer > 0.0:
+		_restore_blackout_vision()
+
+# 2026-08-25, user explicit: "dont reduce elanas eraser. only glints" --
+# elana_reveal_radius (her own small personal cutout, 28px default) no
+# longer touched at all; only Glint's OWN light gets reduced (brush_radius,
+# the erase-mask radius, AND the real visible PointLight2D via glint.gd's
+# apply_light_dim() -- user report "the glow is still big" was about that
+# light specifically, a wholly separate system from either radius).
+func _apply_blackout_vision_reduction() -> void:
 	var tree: SceneTree = get_tree()
 	if tree == null:
 		return
 	var fog = tree.get_first_node_in_group("fog_of_war")
-	if fog != null and "elana_reveal_radius" in fog:
-		fog.elana_reveal_radius = _blackout_canopy_original_reveal_radius
+	if fog != null and "glint_erase_radius" in fog:
+		fog.glint_erase_radius = blackout_canopy_reveal_radius
+	var elana = tree.get_first_node_in_group("player")
+	if elana != null:
+		var glint = elana.get_node_or_null("Glint")
+		if glint != null and glint.has_method("apply_light_dim"):
+			glint.apply_light_dim(blackout_canopy_glint_dim_factor, blackout_canopy_effect_duration)
+
+func _restore_blackout_vision() -> void:
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return
+	var fog = tree.get_first_node_in_group("fog_of_war")
+	if fog != null and "glint_erase_radius" in fog:
+		fog.glint_erase_radius = _blackout_canopy_original_brush_radius
+	var elana = tree.get_first_node_in_group("player")
+	if elana != null:
+		var glint = elana.get_node_or_null("Glint")
+		if glint != null and glint.has_method("cancel_light_dim"):
+			glint.cancel_light_dim()
+
+# Always restores regardless of her CURRENT zone standing -- covers both
+# the normal 30s timeout and an early Flash Stun interrupt happening while
+# she's still standing inside the zone (reduction was applied, never
+# un-toggled by an exit signal that hasn't fired yet). Harmless no-op if
+# the reduction was never applied in the first place (restoring already-
+# matching default values).
+func _end_blackout_canopy() -> void:
+	_blackout_canopy_active_timer = 0.0
+	if _blackout_zone_overlay != null:
+		_blackout_zone_overlay.visible = false
+	_restore_blackout_vision()
 
 # ── Spike Tail ────────────────────────────────────────────────────────────
 # Fires a TailSpike (wyrmbat_tailspike.gd/.tscn) -- reworked 2026-08-24 to
@@ -482,6 +684,25 @@ func _do_kings_slumber() -> void:
 # as a disrupting "hit").
 func _interrupt_kings_slumber() -> void:
 	_is_slumbering = false
+
+# Permanent darkened fog trail along Blackout Canopy's floor sweep
+# (2026-08-25, user: "instead of the red trail. its the darkness fog. the
+# fog is permanent." -- replaces the earlier placeholder red ColorRect
+# afterimage). Calls straight into fog_of_war.gd's new add_fog_at(), the
+# inverse of its normal erase brush -- see that function's own comment.
+func _add_fog_trail_at_current_position() -> void:
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return
+	var fog = tree.get_first_node_in_group("fog_of_war")
+	if fog != null and fog.has_method("add_fog_at"):
+		# 2026-08-25, user: "lower the fog paint path a bit" -- her own
+		# global_position during the sweep sits blackout_canopy_floor_offset
+		# (40px) above the true ground, same offset _find_floor_y() uses so
+		# she doesn't visually clip into the floor; the paint itself has no
+		# such reason to stay that high, so it's nudged back down toward the
+		# real ground surface.
+		fog.add_fog_at(global_position + Vector2(0, FOG_TRAIL_Y_OFFSET), FOG_TRAIL_RADIUS)
 
 func _heal_with_overheal_shield(pct: float) -> void:
 	var amount: float = float(max_hp) * pct

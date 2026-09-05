@@ -78,7 +78,16 @@ extends Node2D
 # now that debug_disable_wall_check defaults to true — with the wall check
 # off, nothing naturally stops the brush from reaching into an adjacent
 # room, so the radius itself needed to shrink to compensate.
-@export var brush_radius: float = 56.0  # world px, soft-edged
+@export var brush_radius: float = 56.0  # world px, soft-edged -- Elana's OWN erase call only, see _process()
+# Glint's own erase radius -- 2026-08-25, split out from brush_radius
+# (previously both Elana's own erase call AND Glint's shared this single
+# field, so anything that shrank brush_radius shrank BOTH at once even when
+# only Glint's was intended -- real bug found via user report: "is the
+# blackout canopy reveal radius affecting all erasers?", confirmed yes).
+# Defaults to the same 56 brush_radius already had, so normal gameplay is
+# unchanged -- only diverges when something (Wyrmbat's Blackout Canopy)
+# deliberately shrinks this one specifically.
+@export var glint_erase_radius: float = 56.0  # world px, soft-edged
 # Save-to-GameData throttle only (see _erase_at()) — the visual erase now
 # runs every physics frame for smoothness, but re-encoding the whole mask
 # to PNG + base64 and writing it to GameData is real, avoidable cost if
@@ -203,7 +212,12 @@ func _physics_process(delta: float) -> void:
 	_overlay_material.set_shader_parameter("elana_world_pos", elana.global_position)
 	_overlay_material.set_shader_parameter("elana_reveal_radius", elana_reveal_radius)
 	_overlay_material.set_shader_parameter("elana_reveal_softness", elana_reveal_softness)
-	_erase_at(elana.global_position)
+	# 2026-08-25, explicit brush_radius now -- previously relied on
+	# _erase_at()'s own default-to-brush_radius fallback, same field Glint's
+	# own erase below also read from, so shrinking one always shrank both.
+	# Passing it explicitly here keeps Elana's own erase genuinely isolated
+	# from Glint's now that they're separate fields.
+	_erase_at(elana.global_position, brush_radius)
 	# Glint is elana.gd's own "Glint" child (see elana.gd's get_node("Glint")
 	# calls) — she floats near Elana normally but can detach and fly ahead
 	# independently during scouting (GameData.glint_scouting), so erasing
@@ -213,13 +227,14 @@ func _physics_process(delta: float) -> void:
 	# not to either character's position directly.
 	var glint := elana.get_node_or_null("Glint")
 	if glint != null:
-		# Luminosity+'s fog-erase bonus (GameData.scout_fog_erase_bonus) now
+		# Luminosity+'s fog-erase bonus (GameData.scout_fog_erase_bonus)
 		# applies to Glint's own erase radius always, not just while
 		# scouting (2026-08-20 — was gated behind GameData.glint_scouting,
 		# so the skill did nothing for her normal attached-follow light).
-		# Still doesn't touch Elana's own erase radius, which stays plain
-		# brush_radius regardless.
-		var glint_radius: float = brush_radius + GameData.scout_fog_erase_bonus
+		# Now driven by glint_erase_radius, its own dedicated field --
+		# genuinely independent of Elana's own brush_radius above (2026-08-25,
+		# see glint_erase_radius's own comment).
+		var glint_radius: float = glint_erase_radius + GameData.scout_fog_erase_bonus
 		_erase_at(glint.global_position, glint_radius)
 	if not _mask_dirty:
 		return
@@ -501,6 +516,50 @@ func _erase_at(world_pos: Vector2, radius: float = -1.0) -> void:
 	# within the current window — still correct without this check (the
 	# next recenter would pick up the change anyway), just avoids a wasted
 	# reupload for erasing that happened just outside what's on screen.
+	var window_world := Rect2(
+		world_rect.position + Vector2(_window_origin) * mask_scale,
+		Vector2(window_size) * mask_scale)
+	if window_world.intersects(Rect2(world_pos - Vector2.ONE * radius, Vector2.ONE * radius * 2.0)):
+		_sync_window()
+
+# Mirror of _erase_at() above -- ADDS fog instead of erasing it (max()
+# instead of min(), so a pixel can only ever become MORE covered, never
+# less) -- 2026-08-25, user explicit: "instead of the red trail. its the
+# darkness fog. the fog is permanent." Wyrmbat's Blackout Canopy floor
+# sweep calls this repeatedly along her path (see wyrmbat.gd) to leave a
+# permanent darkened strip behind her, replacing what was a placeholder red
+# ColorRect trail. No wall-visibility check unlike _erase_at() -- darkening
+# doesn't have the same "don't reveal through walls" concern revealing
+# does, so this stays simpler.
+#
+# 2026-08-25, user explicit: "make brush of bat be squares instead" --
+# unlike _erase_at()'s circular (Euclidean-distance) brush, this uses
+# Chebyshev distance (max of the x/y offsets) instead, which bounds a
+# square footprint rather than a circle. Squares also tile edge-to-edge
+# with no gap between adjacent stamps at the same spacing a circle would
+# leave at the corners, which doubles as part of the "more tight knit" ask.
+func add_fog_at(world_pos: Vector2, radius: float) -> void:
+	var center: Vector2 = (world_pos - world_rect.position) / mask_scale
+	var radius_px: float = radius / mask_scale
+	var min_x := int(max(0, floor(center.x - radius_px)))
+	var max_x := int(min(_mask_size.x - 1, ceil(center.x + radius_px)))
+	var min_y := int(max(0, floor(center.y - radius_px)))
+	var max_y := int(min(_mask_size.y - 1, ceil(center.y + radius_px)))
+	var fogged := false
+	for y in range(min_y, max_y + 1):
+		for x in range(min_x, max_x + 1):
+			var dist: float = max(abs(float(x) - center.x), abs(float(y) - center.y))
+			if dist > radius_px:
+				continue
+			var strength: float = smoothstep(0.0, 1.0, 1.0 - (dist / radius_px))
+			var existing_alpha: float = _full_image.get_pixel(x, y).a
+			var new_alpha: float = max(existing_alpha, strength)
+			if new_alpha > existing_alpha:
+				_full_image.set_pixel(x, y, Color(0.0, 0.0, 0.0, new_alpha))
+				fogged = true
+	if not fogged:
+		return
+	_mask_dirty = true
 	var window_world := Rect2(
 		world_rect.position + Vector2(_window_origin) * mask_scale,
 		Vector2(window_size) * mask_scale)

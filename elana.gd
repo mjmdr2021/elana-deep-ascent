@@ -888,7 +888,7 @@ func _glint_chain_arc(source: Node) -> void:
 	var arc_dmg: int = max(1, int(float(GameData.get_magic_damage()) * GameData.GLINT_CHAIN_DMG))
 	var prev: Node = source
 	for _i in arcs:
-		var next: Node = _find_chain_target(prev)
+		var next: Node = _find_chain_target(prev, arcs)
 		if next == null:
 			break
 		var chain_dir: int = 1 if next.global_position.x >= prev.global_position.x else -1
@@ -1298,7 +1298,7 @@ func _near_solid_terrain() -> bool:
 func _draw() -> void:
 	if not (GameData.elemental_active and GameData.elemental_element == "elec"):
 		return
-	const RANGE = 125.0
+	var RANGE: float = _elec_bolt_range()
 	const HALF_RAD = PI / 180.0 * 35.0
 	var aim = get_local_mouse_position().normalized()
 	var base_angle = aim.angle()
@@ -2160,8 +2160,22 @@ func _enemy_target_pos(enemy: Node) -> Vector2:
 		return enemy.get_targeting_center()
 	return enemy.global_position
 
+# 2026-08-25, user explicit: "BASE IS X2 ON MAX LEVEL" -- the base Elec Bolt
+# cast range/cone (previously a flat 125px, untouched by any skill) now
+# scales with Chain Lightning's level, exactly doubling at max level 3
+# (125 + (125/3)*3 = 250). Shared by _find_elec_target() (real hit
+# detection) AND _draw()'s aim-cone visual below -- pulled into one helper
+# after a real bug: _draw() had its own separate hardcoded 125 that never
+# got touched when the detection range above was first made to scale,
+# leaving the on-screen cone stuck at the old size while the actual
+# functional range had already grown (user report: "why dont we update the
+# visual for the range").
+func _elec_bolt_range() -> float:
+	const BASE_RANGE: float = 125.0
+	return BASE_RANGE + (BASE_RANGE / 3.0) * float(GameData.chain_lightning_count)
+
 func _find_elec_target() -> Node:
-	const MAX_RANGE = 125.0
+	var max_range: float = _elec_bolt_range()
 	const HALF_ANGLE_DEG = 35.0
 	var aim = (get_global_mouse_position() - global_position).normalized()
 	var closest: Node = null
@@ -2169,7 +2183,7 @@ func _find_elec_target() -> Node:
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		var to_enemy: Vector2 = _enemy_target_pos(enemy) - global_position
 		var dist = to_enemy.length()
-		if dist > MAX_RANGE:
+		if dist > max_range:
 			continue
 		if abs(rad_to_deg(aim.angle_to(to_enemy.normalized()))) > HALF_ANGLE_DEG:
 			continue
@@ -2191,7 +2205,7 @@ func _cast_elec_bolt(from_storm: bool = false) -> void:
 		var prev: Node = closest
 		var chain_dmg: int = int(bolt_dmg * 0.7)
 		for _i in GameData.chain_lightning_count:
-			var next: Node = _find_chain_target(prev)
+			var next: Node = _find_chain_target(prev, GameData.chain_lightning_count)
 			if next == null:
 				break
 			var chain_dir: int = 1 if next.global_position.x >= prev.global_position.x else -1
@@ -2362,10 +2376,20 @@ func _spawn_elec_bolt_segment(frames: SpriteFrames, pos: Vector2, angle: float) 
 	tween.tween_property(sprite, "modulate:a", 0.0, 0.25)
 	tween.tween_callback(sprite.queue_free)
 
-func _find_chain_target(prev: Node) -> Node:
-	const CHAIN_RANGE: float = 150.0
+# range_level drives how far each hop can reach -- shared by TWO unrelated
+# chain-lightning systems that both call this (Glint's melee-triggered
+# "Chain" passive AND the elemental tree's own "Chain Lightning" stat on
+# the Elec Bolt cast), so each caller passes its OWN relevant skill level
+# rather than this function assuming one particular skill. 2026-08-25, real
+# bug found: this used to hardcode g_chain's level even when called from
+# the elemental Elec Bolt path, so leveling "Chain Lightning" (path 3) grew
+# arc count correctly but never actually moved the range at all (user
+# report: "same range... are you changing the jump range instead" -- they
+# were leveling chain_lightning_count, not g_chain).
+func _find_chain_target(prev: Node, range_level: int) -> Node:
+	var chain_range: float = GameData.CHAIN_LIGHTNING_RANGE_BASE + GameData.CHAIN_LIGHTNING_RANGE_PER_LEVEL * float(range_level)
 	var best: Node = null
-	var best_dist: float = CHAIN_RANGE
+	var best_dist: float = chain_range
 	var prev_pos: Vector2 = _enemy_target_pos(prev)
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if enemy == prev:

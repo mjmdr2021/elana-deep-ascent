@@ -45,6 +45,18 @@ extends CharacterBody2D
 @export var defense: int = 250
 @export var xp_reward: int = 300
 
+# Same convention base_enemy.gd's own fire_resist/frost_resist/elec_resist
+# exports use (1.0 = normal, <1.0 = resistant, 0.0 = fully immune) --
+# extends CharacterBody2D directly rather than base_enemy.gd (see the
+# header comment) so this doesn't come for free and needs its own copy,
+# applied in on_elemental_hit() below. 2026-08-25, user explicit: "75% on
+# frost and fire. 100% on electric" -- a rock/earth golem shrugging off
+# elemental attacks except lightning arcing straight through stone.
+@export_group("Elemental Resistance")
+@export var fire_resist: float = 0.25
+@export var frost_resist: float = 0.25
+@export var elec_resist: float = 0.0
+
 enum State { ROCK, GOLEM }
 const ROCK_TINT: Color = Color(0.55, 0.55, 0.58, 1.0)
 const BOULDER_TINT: Color = Color(0.5, 0.42, 0.35, 1.0)
@@ -69,12 +81,12 @@ const ATTACK_ROTATION: Array = [Attack.MOUNTAIN_JUDGEMENT, Attack.BOULDER_ROLL, 
 @export var post_attack_rest_duration: float = 2.5
 
 @export_group("Rock Shield")
-@export var rock_shield_enabled: bool = false  # 2026-08-25, temp: disabled for isolated Boulder Hurl/Wyrmbat-redirect testing -- flip back to true when done
+@export var rock_shield_enabled: bool = true
 @export var rock_shield_interval: float = 50.0  # 2026-08-24, user-tuned (was 25)
 @export var rock_shield_amount_pct: float = 0.15  # 2026-08-24, user-tuned (was 0.2/25%, "maybe 15 for now")
 
 @export_group("Mountain Judgement")
-@export var mountain_judgement_enabled: bool = false  # 2026-08-25, temp: disabled for isolated Boulder Hurl/Wyrmbat-redirect testing -- flip back to true when done
+@export var mountain_judgement_enabled: bool = true
 # Terrain rises beneath him, lifting him HIGH (2026-08-24, user-tuned: 200px
 # over 3 seconds -- was 1.0s).
 @export var mountain_judgement_rise_height: float = 200.0
@@ -112,7 +124,7 @@ const ATTACK_ROTATION: Array = [Attack.MOUNTAIN_JUDGEMENT, Attack.BOULDER_ROLL, 
 @export var mountain_judgement_ore_bounce_radius: float = 60.0  # 2026-08-24, user: increase radius (was 40)
 
 @export_group("Boulder Roll")
-@export var boulder_roll_enabled: bool = false  # 2026-08-25, temp: disabled for isolated Boulder Hurl/Wyrmbat-redirect testing -- flip back to true when done
+@export var boulder_roll_enabled: bool = true
 @export var boulder_roll_speed: float = 260.0
 @export var boulder_roll_passes: int = 3
 @export var boulder_roll_camera_shake: float = 0.7
@@ -713,8 +725,21 @@ func on_hit(_hit_direction: int, damage: int, _is_magic: bool = false, _attacker
 	var final_damage: int = GameData.calc_damage(float(damage), float(defense))
 	apply_boss_damage(final_damage)
 
-func on_elemental_hit(_element: String, hit_direction: int, damage: int, attacker: Node = null) -> void:
-	on_hit(hit_direction, damage, true, attacker)
+func _get_element_mult(element: String) -> float:
+	match element:
+		"fire":
+			return fire_resist
+		"frost":
+			return frost_resist
+		"elec":
+			return elec_resist
+	return 1.0
+
+func on_elemental_hit(element: String, hit_direction: int, damage: int, attacker: Node = null) -> void:
+	var mult: float = _get_element_mult(element)
+	if mult <= 0.0:
+		return  # fully immune (electric) -- no damage, no flash/shield-absorb, matches hit_handler.gd's own immune early-return
+	on_hit(hit_direction, max(1, int(round(float(damage) * mult))), true, attacker)
 
 func on_plunge_hit(attacker: Node, hit_direction: int, damage: int) -> bool:
 	on_hit(hit_direction, damage, false, attacker)

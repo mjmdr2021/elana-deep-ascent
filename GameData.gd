@@ -126,7 +126,7 @@ const SKILL_TREE_DATA: Dictionary = {
 	"burn":               { "name": "Burn",               "type": "passive",  "path": 3, "max_level": 3, "prereq": "fire_potency",     "desc": "+20% burn DoT dmg/lvl" },
 	"fire_blast_skill":   { "name": "★ Fire Blast",      "type": "skill",   "path": 3, "max_level": 1, "prereq": "burn",             "desc": "AOE knockback blast (Fire Herb)" },
 	"lightning_potency":  { "name": "Lightning Potency",  "type": "stat",    "path": 3, "max_level": 3, "prereq": "elemental_potency",       "desc": "+10% lightning dmg & resist/lvl" },
-	"chain_lightning":    { "name": "Chain Lightning",    "type": "stat",    "path": 3, "max_level": 3, "prereq": "lightning_potency","desc": "+1 chain target/lvl (70% dmg)" },
+	"chain_lightning":    { "name": "Chain Lightning",    "type": "stat",    "path": 3, "max_level": 3, "prereq": "lightning_potency","desc": "+1 chain target/lvl (70% dmg) · +25px connect range/lvl" },
 	"storm_skill":        { "name": "★ Storm",           "type": "skill",   "path": 3, "max_level": 1, "prereq": "chain_lightning",  "desc": "Continuous lightning (Elec Herb)" },
 	# Power path (4)
 	"power_potency":         { "name": "Power Potency",         "type": "stat",    "path": 4, "max_level": 3, "prereq": "herb_mastery",    "desc": "+10% Power Herb dmg/lvl" },
@@ -161,7 +161,7 @@ const GLINT_SKILL_TREE_DATA: Dictionary = {
 	"g_herb_elemental":   { "name": "Elemental",          "type": "passive", "max_level": 1,  "prereq": "g_herb_integration","desc": "Enables elemental effect on weapon hit (Elemental Herbs)" },
 	"g_slow":             { "name": "Slow",               "type": "passive", "max_level": 8,  "prereq": "g_herb_elemental",  "desc": "Melee hits slow 3s (Frost Herb) · +5% slow/lvl (max 40%)" },
 	"g_burn":             { "name": "Burn",               "type": "passive", "max_level": 8,  "prereq": "g_herb_elemental",  "desc": "Melee hits burn 3s (Fire Herb) · +5% tick dmg/lvl" },
-	"g_chain":            { "name": "Chain",              "type": "passive", "max_level": 8,  "prereq": "g_herb_elemental",  "desc": "Melee hits arc lightning to +1 enemy/lvl (Elec Herb) · 35% of magic dmg per arc" },
+	"g_chain":            { "name": "Chain",              "type": "passive", "max_level": 8,  "prereq": "g_herb_elemental",  "desc": "Melee hits arc lightning to +1 enemy/lvl (Elec Herb) · 35% of magic dmg per arc · +25px connect range/lvl" },
 	"g_toxic":            { "name": "Toxic",              "type": "passive", "max_level": 8,  "prereq": "g_herb_integration","desc": "Melee hits poison 8s (Heal Herb) · +2% tick dmg/lvl" },
 	"g_lifesteal":        { "name": "Lifesteal",          "type": "passive", "max_level": 8,  "prereq": "g_herb_integration","desc": "+3% melee lifesteal/lvl (Power Herb)" },
 	"g_phantom":          { "name": "Phantom",            "type": "passive", "max_level": 8,  "prereq": "g_herb_integration","desc": "+2% phantom strike chance/lvl (Agility Herb) · inherits crit" },
@@ -238,6 +238,19 @@ const GLINT_POISON_BASE: float = 0.05
 const GLINT_POISON_TICKS: int = 8
 const GLINT_PHANTOM_DMG: float = 0.5
 const GLINT_CHAIN_DMG: float = 0.5 * 0.7  # 50% of magic dmg, then chain-lightning falloff
+# 2026-08-25, user explicit: "add lightning connect range... increase
+# lightning cone range" -- how far each arc can reach to find its next
+# target (elana.gd's _find_chain_target()). Shared by TWO unrelated
+# chain-lightning systems (Glint's melee-triggered "Chain" passive, g_chain;
+# and the elemental tree's own "Chain Lightning" stat on the Elec Bolt
+# cast, chain_lightning_count) -- each caller passes ITS OWN relevant
+# skill level in, this isn't tied to one specific skill. Real bug found the
+# same day: this used to hardcode g_chain's level even when called from the
+# Elec Bolt path, so leveling "Chain Lightning" grew arc count but never
+# actually moved the range (user report: "same range... are you changing
+# the jump range instead").
+const CHAIN_LIGHTNING_RANGE_BASE: float = 150.0
+const CHAIN_LIGHTNING_RANGE_PER_LEVEL: float = 20.0  # 2026-08-25, user: "the jumps, lessen by a bit" (was 25)
 const COMBO_WINDOW: float = 2.0
 const EXEC_WINDOW: float = 10.0
 const EXEC_MAX_STACKS: int = 5
@@ -360,6 +373,13 @@ const COBBLECROAK_JUMP_MULT_BONUS: float = 0.5
 # separate copy of the same number: Elemander's Electric Storm bolts
 # (elemander.gd) and electrified water (terrain_hazards.gd) both read this.
 const SHOCK_STUN_DURATION: float = 0.7
+# Different from SHOCK_STUN_DURATION above -- that one is Elana GETTING
+# shocked by enemy attacks; this is enemies getting shocked BY Elana's own
+# elec damage (hit_handler.gd's on_elemental_hit()). 2026-08-25, user
+# explicit: "HAVE THE SHOCK BE INNATE TO ELECTRIC ATTACK" -- unlike
+# Burn/Freeze (which need skill points invested, see burn_dmg_mult/
+# freeze_chance), Shock always applies on any elec hit, no skill gate.
+const ELEC_SHOCK_ENEMY_STUN_DURATION: float = 0.2
 var dev_no_cooldowns = false  # Dev toggle — forces every cooldown to stay at 0 while on
 var dev_fixed_zoom_1x = false  # Dev toggle — locks camera to 1x zoom instead of the dynamic system
 var dev_fixed_zoom_0_1x = false  # Dev toggle (2026-08-22) — locks camera to 0.1x zoom, a very wide debug view

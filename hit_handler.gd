@@ -137,6 +137,13 @@ func on_elemental_hit(element: String, hit_direction: int, damage: int, attacker
 			_enemy.velocity = Vector2.ZERO
 			_enemy.is_frozen = true
 			_enemy.set("freeze_immune_timer", 3.0)
+	# Shock (elec hits) — innate to the element itself, no skill gate/chance
+	# roll unlike Burn/Freeze above (2026-08-25, user explicit: "HAVE THE
+	# SHOCK BE INNATE TO ELECTRIC ATTACK"). Every elec hit briefly stuns.
+	if element == "elec":
+		_enemy.is_stunned = true
+		_enemy.stun_timer = max(_enemy.stun_timer, GameData.ELEC_SHOCK_ENEMY_STUN_DURATION)
+		_enemy.velocity = Vector2.ZERO
 	if _enemy.hp <= 0:
 		_die(attacker)
 		return

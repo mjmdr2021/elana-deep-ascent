@@ -49,6 +49,14 @@ func apply_light_dim(factor: float, duration: float) -> void:
 	_dim_factor = min(_dim_factor, factor)
 	_dim_timer = max(_dim_timer, duration)
 
+# Explicit early-cancel, separate from apply_light_dim()'s own auto-expiry
+# (2026-08-25, added for Wyrmbat's Blackout Canopy zone-gating -- the dim
+# needs to end the instant Elana leaves the darkened floor zone, not wait
+# out whatever duration was originally applied).
+func cancel_light_dim() -> void:
+	_dim_factor = 1.0
+	_dim_timer = 0.0
+
 # Independent scouting — she detaches, roams under WASD with simple wall
 # collision, and beelines back through everything once recalled.
 const SCOUT_SPEED: float = 180.0

@@ -39,8 +39,8 @@ var _elana_in_attack_trigger: bool = false
 # (e.g. all at 1.0 = even split; set one to 0.0 to fully exclude it, like
 # testing one attack in isolation without the others interrupting).
 @export var frost_beam_weight: float = 1.0
-@export var fire_dash_weight: float = 1.0
-@export var electric_storm_weight: float = 1.0
+@export var fire_dash_weight: float = 0.0  # 2026-08-30, temp: isolated Frost Beam testing -- flip back to 1.0 when done
+@export var electric_storm_weight: float = 0.0  # 2026-08-30, temp: isolated Frost Beam testing -- flip back to 1.0 when done
 
 # Shared across all 4 attacks (Frost Beam, Fire Dash, Electric Storm, Wind
 # Gust) — a brief hold right at the very end of each, after everything else
@@ -184,12 +184,11 @@ const FROST_BEAM_ENDPOINT_FEET_OFFSET: float = 20.0
 # AttackTriggerZone's own bounds (not a fixed radius around Elemander), so
 # it only ever rains where the trigger zone actually is.
 @export var electric_storm_windup_time: float = 1.0
-# Registered via _set_attack_tint() (not written to _body_sprite.color
-# directly, and not .modulate — that multiplies on top of the ColorRect's
-# existing brown .color instead of replacing it, reading as a muddy overlay
-# rather than actually turning yellow) — same as every attack's tint now,
-# so Phase 2 can blend two of these together instead of one overwriting
-# another.
+# Registered via _set_attack_tint() (not written to _body_sprite.modulate
+# directly) -- same as every attack's tint now, so Phase 2 can blend two of
+# these together instead of one overwriting another. See
+# _refresh_body_tint()'s own comment for how this actually reaches the
+# sprite.
 const ELECTRIC_STORM_TINT: Color = Color(1.0, 0.85, 0.1, 1.0)
 @export var electric_storm_duration: float = 10.0
 @export var electric_storm_bolt_count: int = 30
@@ -328,6 +327,19 @@ var _frost_beam_windup_timer: float = 0.0
 # muddy overlay rather than an actual color change) or a direct .color
 # write (which would fight a concurrently-tinting Phase 2 partner instead
 # of blending with it).
+# 2026-08-30, user explicit: "reinvent this... make the beam and the head
+# be together... so the angle of the beam will always be same with angle
+# of head" -- dropped the earlier +15deg "looking up while aiming" offset
+# entirely (was only ever applied to the head, never the beam's own real
+# line, so it created a visible mismatch between where the head appeared
+# to look and where the beam was actually going). HeadPivot's own position
+# was also collapsed to sit exactly on Head's point (elemander.tscn) so
+# the rotation pivot and the beam's real start point are now the same
+# physical spot, not just the same angle.
+#
+# drawn-forward angle = rotation + PI (the art's neutral pose faces LEFT,
+# i.e. 180 deg, not the engine's own 0-deg/right default) -- see
+# _tick_frost_beam_windup()'s own comment for the full derivation.
 const FROST_BEAM_TINT: Color = Color(0.25, 0.55, 1.0, 1.0)
 # Base width the glow texture is built at once, in _ready() — stretched via
 # scale.x per frame to match the beam's actual current length instead of
@@ -336,12 +348,26 @@ const FROST_BEAM_GLOW_BASE_WIDTH: float = 100.0
 const FROST_BEAM_GLOW_ENERGY: float = 2.5  # faint, well under the electric bolt glow's 6-10
 
 @onready var _head: Node2D = $Head
+# 2026-08-30, user explicit: "make a new one. i dont want them to be the
+# same shit" -- Head itself stays the fixed Frost Beam origin/aim anchor
+# (_head.global_position, untouched, never rotates); HeadPivot is a
+# genuinely separate child node that owns the actual visual/collision/
+# hurtbox and will be what eventually rotates for the head-tilt feature
+# (still on hold) -- decoupled so tilting the head doesn't drag the beam's
+# own origin point along with it.
+@onready var _head_pivot: Node2D = $Head/HeadPivot
+# Anchor 2 in the "crank" model (2026-08-30/31, user explicit) -- a real,
+# draggable marker positioned wherever the mouth/snout tip actually sits
+# in the art, LOCAL to HeadPivot. Its own .position.angle() (the direction
+# from the pivot to the mouth, before any rotation) replaces what used to
+# be a hardcoded "-PI, assume dead-left" guess -- generalizes correctly to
+# wherever the user actually places it, not just a fixed 180deg assumption.
+@onready var _mouth_anchor: Node2D = $Head/HeadPivot/MouthAnchor
 @onready var _hp_bg: ColorRect = $HPBar/Background
 @onready var _hp_fill: ColorRect = $HPBar/Fill
 @onready var _frost_beam: Line2D = $FrostBeam
 @onready var _frost_beam_glow: PointLight2D = $FrostBeamGlow
-@onready var _body_sprite: ColorRect = $BodyVisual
-@onready var _body_base_color: Color = _body_sprite.color
+@onready var _body_sprite: Sprite2D = $BodyVisual
 @onready var _frost_beam_endpoint: Area2D = $FrostBeamEndPoint
 @onready var _dash_areas: Array = [$DashArea1, $DashArea2, $DashArea3]
 @onready var _dash_collision: Area2D = $ElemanderDashCollision
@@ -361,6 +387,12 @@ func _ready() -> void:
 	hp = max_hp
 	add_to_group("enemies")
 	add_to_group("bosses")
+	# 2026-08-30, real hittable head region -- see elemander_head.gd's own
+	# header comment for why this forwarding is needed at all. set()
+	# instead of a direct property write -- _head_pivot is typed Node2D
+	# (its custom script has no class_name), so boss_ref isn't a known
+	# member of that static type.
+	_head_pivot.set("boss_ref", self)
 	_frost_beam.visible = false
 	_frost_beam.width = frost_beam_width
 	_frost_beam.default_color = Color(0.4, 0.85, 1.0, 0.85)
@@ -437,12 +469,21 @@ func _on_wind_gust_trigger_body_exited(body: Node) -> void:
 
 # ── Phase 2 combo tint blending ─────────────────────────────────────────────
 # Each attack that wants to show a tint registers its own color here instead
-# of writing straight to _body_sprite.color/.modulate — in Phase 1 there's
-# only ever one entry, so this reduces to "show that one color" exactly like
+# of writing straight to _body_sprite.modulate — in Phase 1 there's only
+# ever one entry, so this reduces to "show that one color" exactly like
 # before. In Phase 2, two attacks can be tinting at once (e.g. Frost Beam's
 # blue + Electric Storm's yellow); _refresh_body_tint() averages whatever's
 # currently registered instead of the two attacks' own start/end code
 # fighting over the same property.
+#
+# 2026-08-30, user added real sprite art (elemander-sprite-1.png) --
+# BodyVisual went from a flat-fill ColorRect (whose .color could be
+# directly REPLACED) to a real Sprite2D, which only has .modulate (a
+# MULTIPLY tint, same as every other sprite-based enemy in this codebase
+# already uses for hit-flash/tint effects). The old header comment here
+# used to warn against .modulate specifically because multiplying onto a
+# flat ColorRect .color read muddy -- that concern doesn't apply to real
+# shaded artwork, so this migrates to the standard modulate approach.
 var _active_tints: Dictionary = {}
 
 func _set_attack_tint(attack_id: String, tint: Color) -> void:
@@ -455,13 +496,13 @@ func _clear_attack_tint(attack_id: String) -> void:
 
 func _refresh_body_tint() -> void:
 	if _active_tints.is_empty():
-		_body_sprite.color = _body_base_color
+		_body_sprite.modulate = Color.WHITE
 		return
 	var blended: Color = Color(0, 0, 0, 0)
 	for tint in _active_tints.values():
 		blended += tint
 	blended /= float(_active_tints.size())
-	_body_sprite.color = blended
+	_body_sprite.modulate = blended
 
 func _physics_process(delta: float) -> void:
 	if _frost_beam_freeze_lockout_timer > 0.0:
@@ -585,6 +626,20 @@ func _tick_frost_beam_windup(delta: float) -> void:
 	var target = get_tree().get_first_node_in_group("player")
 	if target:
 		_frost_beam_endpoint.global_position = target.global_position + Vector2(0, FROST_BEAM_ENDPOINT_FEET_OFFSET)
+		# 2026-08-30, head tilt starts telegraphing during the windup too,
+		# same reasoning as _update_frost_beam_visual()'s own tilt update --
+		# the endpoint already tracks her live position here, invisibly.
+		var offset: Vector2 = _frost_beam_endpoint.global_position - _head.global_position
+		if offset != Vector2.ZERO:
+			# 2026-08-31, "crank" model (user explicit) -- Anchor 1 (the
+			# pivot, _head_pivot's own origin) is the same point the beam
+			# starts from; Anchor 2 (_mouth_anchor) sits at a fixed local
+			# offset from the pivot, on the mouth tip. Rotating the head so
+			# that Anchor 1->Anchor 2's direction matches the beam's real
+			# direction is exactly what sweeps the mouth onto the beam's
+			# line, at any aim angle -- generalizes the earlier hardcoded
+			# "-PI, assume dead-left" guess into the real local offset.
+			_head_pivot.rotation = offset.angle() - _mouth_anchor.position.angle()
 	if _frost_beam_windup_timer <= 0.0:
 		_start_frost_beam()
 
@@ -723,6 +778,14 @@ func _update_frost_beam_visual() -> void:
 	_frost_beam.rotation = 0.0
 	var offset = _frost_beam_endpoint.global_position - _head.global_position
 	_frost_beam.points = PackedVector2Array([Vector2.ZERO, offset])
+	# 2026-08-31, "crank" model (user explicit) -- HeadPivot (a genuinely
+	# separate node from Head, see elemander_head.gd's own comment) sits at
+	# the exact same point the beam starts from (Anchor 1), and rotates so
+	# MouthAnchor (Anchor 2, a fixed local offset from the pivot) swings
+	# onto the beam's real line -- see _tick_frost_beam_windup()'s own
+	# comment for the full explanation.
+	if offset != Vector2.ZERO:
+		_head_pivot.rotation = offset.angle() - _mouth_anchor.position.angle()
 
 	# Faint continuous glow along the beam — same linear-gradient-light
 	# technique as Electric Storm's bolt glow, but built once (FROST_BEAM_
@@ -742,6 +805,7 @@ func _start_frost_beam_window() -> void:
 	_frost_beam.visible = false
 	_frost_beam_glow.visible = false
 	_frost_beam_endpoint.visible = false
+	_head_pivot.rotation = 0.0  # head tilt resets to the untouched idle pose once the beam itself is done aiming
 
 # Window: "jaw frozen shut... frost resisted (80%), fire/elec normal" — no
 # separate vulnerable/bonus-damage multiplier, "frost" staying in
@@ -758,6 +822,7 @@ func _tick_frost_beam_window(delta: float) -> void:
 func _start_frost_beam_recovery() -> void:
 	state = State.FROST_BEAM_RECOVERY
 	_frost_beam_timer = attack_recovery_pause
+	_head_pivot.rotation = 0.0  # head tilt resets to the untouched idle pose once the beam itself is done aiming
 
 func _tick_frost_beam_recovery(delta: float) -> void:
 	_frost_beam_timer -= delta
@@ -918,12 +983,14 @@ func _run_fire_dash() -> void:
 	# invisible for the whole dash — still a live target otherwise (nothing
 	# else in this script ever touches these), so melee could still land a
 	# hit on an invisible boss sitting off to the side. Disabling both
-	# collision shapes here (same $CollisionShape2D.disabled convention
-	# ceiling_dropper.gd uses for its own dormant state) makes the real
+	# collision shapes here (same .disabled convention ceiling_dropper.gd
+	# uses for its own dormant state -- 2026-08-30, both converted from
+	# CollisionShape2D to CollisionPolygon2D so the user can trace the real
+	# sprite's silhouette; same .disabled property either way) makes the real
 	# body genuinely untouchable for the dash's duration, not just hard to
 	# see. Restored once she's back in place at the end.
-	$CollisionShape2D.disabled = true
-	$Hurtbox/CollisionShape2D.disabled = true
+	$CollisionPolygon2D.disabled = true
+	$Hurtbox/CollisionPolygon2D.disabled = true
 
 	# Phase 3 does more passes with a shorter warning each — captured once
 	# here rather than read live inside the loop, so a phase change landing
@@ -953,8 +1020,8 @@ func _run_fire_dash() -> void:
 	_body_sprite.visible = true
 	_head.visible = true
 	position = _original_position
-	$CollisionShape2D.disabled = false
-	$Hurtbox/CollisionShape2D.disabled = false
+	$CollisionPolygon2D.disabled = false
+	$Hurtbox/CollisionPolygon2D.disabled = false
 
 	# Tint clears after this check regardless of which branch runs — held
 	# through the punish window if one opens (previously it reset the
@@ -1102,10 +1169,16 @@ func _show_debug_box(top_left: Vector2, bottom_right: Vector2) -> void:
 # so it doesn't feel metronomic) -> tint clears, water de-electrifies ->
 # paralysis-style punish window, now gated by _roll_punish_window() same as
 # the other two attacks, instead of guaranteed every time.
+# 2026-08-30, real bug found: SceneTree.create_timer()'s process_always
+# param defaults to TRUE -- every await below kept ticking (and the whole
+# storm kept advancing -- windup, bolts, punish window) even while
+# get_tree().paused was true (hud.gd's own options-menu pause). Every
+# create_timer() call in this function now passes false explicitly so the
+# whole sequence actually respects pause like everything else does.
 func _run_electric_storm() -> void:
 	_active_attacks += 1
 	_set_attack_tint("electric_storm", ELECTRIC_STORM_TINT)
-	await get_tree().create_timer(electric_storm_windup_time).timeout
+	await get_tree().create_timer(electric_storm_windup_time, false).timeout
 	if not is_instance_valid(self):
 		return
 
@@ -1128,7 +1201,7 @@ func _run_electric_storm() -> void:
 	var avg_gap: float = electric_storm_duration / float(electric_storm_bolt_count)
 	for i in electric_storm_bolt_count:
 		var gap: float = randf_range(avg_gap * 0.4, avg_gap * 1.6)
-		await get_tree().create_timer(gap).timeout
+		await get_tree().create_timer(gap, false).timeout
 		if not is_instance_valid(self):
 			if is_instance_valid(terrain):
 				_de_electrify_water(terrain, electrified_cells)
@@ -1145,12 +1218,12 @@ func _run_electric_storm() -> void:
 	# whole storm — that part's unconditional. Only the extra hold afterward
 	# (the actual punish window) is gated by the roll now.
 	if _roll_punish_window("electric_storm"):
-		await get_tree().create_timer(_window_duration(electric_storm_window_duration)).timeout
+		await get_tree().create_timer(_window_duration(electric_storm_window_duration), false).timeout
 		if not is_instance_valid(self):
 			return
 	_clear_attack_tint("electric_storm")
 	active_elements.erase("elec")
-	await get_tree().create_timer(attack_recovery_pause).timeout
+	await get_tree().create_timer(attack_recovery_pause, false).timeout
 	if not is_instance_valid(self):
 		return
 	_active_attacks -= 1

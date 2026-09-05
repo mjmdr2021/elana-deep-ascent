@@ -1,18 +1,15 @@
 [gd_scene format=3 uid="uid://chxb4aakfv5od"]
 
 [ext_resource type="Script" uid="uid://qo4whsp072c" path="res://elemander.gd" id="1_elemander"]
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_m5los"]
-size = Vector2(244, 312)
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
-size = Vector2(244, 312)
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_trigger"]
-size = Vector2(492, 312)
+[ext_resource type="Texture2D" uid="uid://cbpf7x7wcc6ns" path="res://elemander-sprite-head.png" id="2_j1bql"]
+[ext_resource type="Texture2D" uid="uid://b15b5akeklmwd" path="res://elemander-sprite-body.png" id="3_0fhv8"]
+[ext_resource type="Script" uid="uid://b5yxjcj8pll62" path="res://elemander_head.gd" id="4_elemander_head"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_ball"]
 radius = 14.0
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_trigger"]
+size = Vector2(492, 312)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_sm2e3"]
 size = Vector2(600, 104)
@@ -49,35 +46,61 @@ collision_layer = 3
 script = ExtResource("1_elemander")
 max_hp = 6000
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1476502727]
-position = Vector2(22, 100)
-shape = SubResource("RectangleShape2D_m5los")
+[node name="Head" type="Area2D" parent="." unique_id=1721573340]
+position = Vector2(-80, -64)
+collision_layer = 0
+collision_mask = 0
+monitoring = false
+monitorable = false
 
-[node name="BodyVisual" type="ColorRect" parent="." unique_id=429874598]
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -100.0
-offset_top = -56.0
-offset_right = 144.0
-offset_bottom = 256.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(0.55, 0.25, 0.1, 1)
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Head" unique_id=893745681]
+position = Vector2(-24, 24)
+shape = SubResource("CircleShape2D_ball")
 
-[node name="Hurtbox" type="Area2D" parent="." unique_id=1541675936]
+[node name="HeadPivot" type="Node2D" parent="Head" unique_id=1712449216]
+script = ExtResource("4_elemander_head")
+
+[node name="MouthAnchor" type="Node2D" parent="Head/HeadPivot" unique_id=1231474242]
+position = Vector2(-76, 56)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Head/HeadPivot/MouthAnchor" unique_id=625800912]
+shape = SubResource("CircleShape2D_ball")
+
+[node name="BodyVisual" type="Sprite2D" parent="Head/HeadPivot" unique_id=757227650]
+position = Vector2(181.88544, 120.26291)
+scale = Vector2(1.346482, 1.3464823)
+texture = ExtResource("2_j1bql")
+
+[node name="HeadCollisionPolygon2D" type="CollisionPolygon2D" parent="Head/HeadPivot" unique_id=90687730]
+position = Vector2(-32, -24)
+polygon = PackedVector2Array(-16, 8, -8, -8, 80, -64, 64, -24, 80, 0, 64, 56, 16, 64, -32, 88, -48, 80, -56, 64, -48, 40)
+
+[node name="Hurtbox" type="Area2D" parent="Head/HeadPivot" unique_id=343155008]
+position = Vector2(-56, 40)
 collision_layer = 4
 collision_mask = 0
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox" unique_id=1058051684]
-position = Vector2(22, 100)
-shape = SubResource("RectangleShape2D_body")
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Head/HeadPivot/Hurtbox" unique_id=1568975157]
+position = Vector2(24, -64)
+polygon = PackedVector2Array(-16, 8, -8, -8, 80, -64, 64, -24, 80, 0, 64, 56, 16, 64, -32, 88, -48, 80, -56, 64, -48, 40)
 
-[node name="Head" type="Node2D" parent="." unique_id=1721573340]
-position = Vector2(-80, 8)
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="." unique_id=1476502727]
+position = Vector2(13.200012, 102)
+polygon = PackedVector2Array(-46, -196, 18, -180, 58, -140, 74, -180, 74, -244, -6, -356, 82, -356, 330, -12, 290, 92, 210, 132, 122, 132, 98, 164, -94, 164, -62, 140, -30, 132, -22, 116, -62, 44, -30, -36, -62, -28, -102, -12, -134, 4, -142, 4, -134, -20, -174, -28, -158, -44, -86, -44, -54, -100, -54, -132, -86, -124)
+
+[node name="BodyVisual" type="Sprite2D" parent="." unique_id=429874598]
+position = Vector2(109.65485, 47.3786)
+scale = Vector2(1.2481849, 1.248185)
+texture = ExtResource("3_0fhv8")
+
+[node name="Hurtbox" type="Area2D" parent="." unique_id=1541675936]
+position = Vector2(-8.799988, 2)
+collision_layer = 4
+collision_mask = 0
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Hurtbox" unique_id=1058051684]
+position = Vector2(22, 100)
+polygon = PackedVector2Array(-122, -156, 122, -156, 122, 156, -122, 156)
 
 [node name="AttackTriggerZone" type="Area2D" parent="." unique_id=637827921]
 position = Vector2(-346, 100)

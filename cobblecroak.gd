@@ -25,6 +25,17 @@ extends CharacterBody2D
 @export var defense: int = 200
 @export var xp_reward: int = 200
 
+# Same convention base_enemy.gd's own fire_resist/frost_resist/elec_resist
+# exports use (1.0 = normal, <1.0 = resistant, 0.0 = fully immune) --
+# extends CharacterBody2D directly rather than base_enemy.gd (see header)
+# so this doesn't come for free, applied in on_elemental_hit() below.
+# 2026-08-25, user explicit: "have frost resistance of 75% and fire resist
+# of 75%" -- elec left at normal (1.0), not mentioned.
+@export_group("Elemental Resistance")
+@export var fire_resist: float = 0.25
+@export var frost_resist: float = 0.25
+@export var elec_resist: float = 1.0
+
 @export_group("Movement")
 @export var chase_speed: float = 60.0
 @export var chase_stop_distance: float = 60.0
@@ -854,7 +865,7 @@ func _flash_hit() -> void:
 # was written and then explicitly reverted same session (user: "REMEMBER
 # THE MEMEMORY THAT ASK FIRST BEFORE APPLYING CODE CHANGE") -- flagged here,
 # not fixed, until asked for.
-func on_hit(hit_direction: int, damage: int, _is_magic: bool = false, attacker: Node = null) -> void:
+func on_hit(hit_direction: int, damage: int, is_magic: bool = false, attacker: Node = null) -> void:
 	if hp <= 0:
 		return
 	# Hibernate invulnerability (2026-08-23, user's own spec: "cannot be
@@ -870,7 +881,16 @@ func on_hit(hit_direction: int, damage: int, _is_magic: bool = false, attacker: 
 			_is_hibernating = false
 			_shake_player_camera(0.5)
 			_flash_hit()
-		_apply_incoming_knockback(hit_direction, KNOCKBACK_SCALE)
+		# 2026-08-25, real bug found: is_magic used to be dropped entirely
+		# (underscore-prefixed, unused) -- every hit, magic or not, always
+		# applied whatever weapon Elana currently has equipped's knockback,
+		# so Bulwark's reflect damage (is_magic=true, no weapon involved at
+		# all) and any elemental/magic hit shoved her exactly like a melee
+		# swing would. Gated now, matching hit_handler.gd's own on_hit()
+		# convention (every other enemy in the codebase already skips
+		# weapon knockback on magic hits) -- user explicit: "fix it."
+		if not is_magic:
+			_apply_incoming_knockback(hit_direction, KNOCKBACK_SCALE)
 		return
 	var final_damage: int = GameData.calc_damage(float(damage), float(defense))
 	apply_boss_damage(final_damage)
@@ -881,7 +901,8 @@ func on_hit(hit_direction: int, damage: int, _is_magic: bool = false, attacker: 
 	# 8-hit threshold regardless of element/weapon.
 	if _is_grabbing_elana:
 		_tongue_pull_hits_landed += 1
-	_apply_incoming_knockback(hit_direction, 1.0)
+	if not is_magic:
+		_apply_incoming_knockback(hit_direction, 1.0)
 
 # Scale is 1.0 (full strength) outside Hibernate, KNOCKBACK_SCALE (halved)
 # only while hibernating (2026-08-23, user explicit: "remove the halving of
@@ -911,18 +932,35 @@ func _apply_incoming_knockback(hit_direction: int, scale: float) -> void:
 # (attacker.is_heavy_attack) could never match a real Fire Blast cast at
 # all, which is why it silently never released her. Any "fire" elemental
 # hit landed while grabbed now satisfies the condition, full stop.
+func _get_element_mult(element: String) -> float:
+	match element:
+		"fire":
+			return fire_resist
+		"frost":
+			return frost_resist
+		"elec":
+			return elec_resist
+	return 1.0
+
 func on_elemental_hit(element: String, hit_direction: int, damage: int, attacker: Node = null) -> void:
 	if _is_grabbing_elana and element == "fire":
 		_tongue_pull_release_requested = true
-	# Croak interrupt (2026-08-23) -- same chance-based roll every other
-	# enemy's frost-freeze already uses (GameData.freeze_chance), not a
-	# guaranteed cut -- user's own explicit choice ("same chance-based roll
-	# as everyone else") over a guaranteed interrupt. Electric/shock has no
-	# equivalent enemy-side status yet in this codebase -- user flagged
-	# that's coming later and should also interrupt this once it exists.
+	# Croak interrupt (2026-08-23) -- frost uses the same chance-based roll
+	# every other enemy's freeze already does (GameData.freeze_chance), not
+	# a guaranteed cut -- user's own explicit choice ("same chance-based
+	# roll as everyone else") over a guaranteed interrupt.
 	if _is_croaking and element == "frost" and GameData.freeze_chance > 0.0 and randf() < GameData.freeze_chance:
 		_croak_interrupted = true
-	on_hit(hit_direction, damage, true, attacker)
+	# Shock now exists (hit_handler.gd's on_elemental_hit(), innate stun,
+	# 2026-08-25) -- unlike frost above, this is a GUARANTEED interrupt on a
+	# single hit, no chance roll (user explicit: "make it interrupt if hit
+	# by shock 1 time").
+	if _is_croaking and element == "elec":
+		_croak_interrupted = true
+	var mult: float = _get_element_mult(element)
+	if mult <= 0.0:
+		return  # fully immune -- no damage
+	on_hit(hit_direction, max(1, int(round(float(damage) * mult))), true, attacker)
 
 func on_plunge_hit(attacker: Node, hit_direction: int, damage: int) -> bool:
 	on_hit(hit_direction, damage, false, attacker)
