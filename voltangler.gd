@@ -36,7 +36,6 @@ enum State { DEFLATED, INFLATING, INFLATED, DEFLATING }
 @export var deflated_duration: float = 8.0
 @export var inflated_duration: float = 8.0
 @export var state_transition_duration: float = 1.0
-@export var inflated_scale: float = 1.3
 
 @export_group("Armor & HP")
 # Retuned 2026-08-22 (was 80/40, base hp was 1000) -- user's exact spec:
@@ -106,10 +105,15 @@ var _lantern_reveal_timer: float = 0.0
 var _pulsing_shock_timer: float = 0.0
 var _regen_tick_timer: float = 0.0
 
-@onready var _body_visual: ColorRect = $ColorRect
+@onready var _body_sprite: AnimatedSprite2D = $AnimatedSprite2D
+# 2026-09-06, user explicit: "the fin is only for the big version. not the
+# deflated version... fin is just consistent animation" -- separate node
+# from _body_sprite, played once in _ready() and never touched again except
+# for .visible, so it loops continuously on its own regardless of the body's
+# deflated/big state swaps.
+@onready var _fin_sprite: AnimatedSprite2D = $Fin
 @onready var _lantern: Node2D = $Lantern
 @onready var _lantern_hurtbox: Area2D = $Lantern/Hurtbox
-@onready var _lantern_bulb: ColorRect = $Lantern/Bulb
 @onready var _lantern_glow: Sprite2D = $Lantern/Glow
 @onready var _pulsing_shock_zone: Area2D = $PulsingShockZone
 
@@ -120,8 +124,24 @@ func _ready() -> void:
 	defense = deflated_defense
 	_lantern.boss_ref = self
 	_lantern_hurtbox.monitoring = false
-	_lantern_bulb.visible = false
 	_lantern_glow.visible = false
+	_body_sprite.play("deflated")
+	# Played once, never restarted — see _fin_sprite's own comment above.
+	# Starts hidden; _start_inflate()'s transition reveals it once actually
+	# INFLATED, _start_deflate()'s hides it again.
+	_fin_sprite.visible = false
+	_fin_sprite.play("flutter")
+
+# base_enemy.gd's own _update_sprite() (called every physics frame from
+# _physics_process()) auto-picks "attack"/"walk"/"idle" off movement/attack
+# timers and unconditionally sets flip_h off `direction` -- none of which
+# apply here (no AttackZone, enemy_type STATIONARY so velocity/direction
+# never change, and the body's only 2 animations are "deflated"/"big", so
+# that generic switch would just never match anything anyway). Skipped
+# entirely for the same reason ceiling_grabber.gd/mantrap.gd do -- full
+# manual control via _ready()/_start_inflate()/_start_deflate() instead.
+func _update_sprite() -> void:
+	pass
 
 # Floats -- no falling, no ground needed. base_enemy.gd's own version
 # unconditionally adds gravity unless is_on_floor(), which would just sink
@@ -139,7 +159,36 @@ func _apply_gravity(_delta: float) -> void:
 func _update_zones() -> void:
 	$AggroZone.position.x = aggro_zone_offset * direction
 
+# 2026-09-06, real bug found (user: "like voltangler is patrolling. is it
+# fixed?") -- enemy.gd's own _move() (never overridden here before now)
+# checks `if target:` BEFORE ever looking at enemy_type, so setting
+# enemy_type = STATIONARY in _ready() never actually did anything once
+# Elana entered the 500x300 AggroZone -- base_enemy.gd's own _ready() wires
+# up AggroZone's body_entered/exited unconditionally (never disconnected
+# here), so target got set and the generic chase branch
+# (`velocity.x = chase_speed * direction`) overrode STATIONARY outright,
+# visibly sliding her toward/away from Elana as target crossed
+# stop_distance. Always stationary here instead, ignoring target entirely
+# -- Voltangler was never designed to chase (see this file's own header
+# comment: "Floats in place... no standard melee"); target is only ever
+# read by enemy.gd's own chase/WallCheck logic, nothing in this boss's own
+# custom mechanics (pulsing shock, on-hit punish, lantern reveal) needs it.
+func _move(_delta: float) -> void:
+	velocity.x = 0
+
 func _physics_process(delta: float) -> void:
+	# 2026-09-06, real bug found (user: "voltangler should not be moving") --
+	# every non-magic weapon hit sets _pending_knockback whenever
+	# GameData.weapon_knockback_x/y != 0.0 (hit_handler.gd's on_hit()),
+	# which base_enemy.gd's own _physics_process() (called via super below)
+	# writes straight to velocity before move_and_slide() -- same mechanism
+	# Mantrap explicitly guards against to stay rooted. Voltangler never had
+	# that guard despite being designed stationary (enemy_type STATIONARY
+	# only zeroes velocity in _move(), which is skipped entirely while
+	# is_stunned -- exactly the state a knockback hit puts her in). Same
+	# fix, same spot mantrap.gd uses -- discard any queued push before
+	# super() gets a chance to consume it.
+	_pending_knockback = Vector2.ZERO
 	super._physics_process(delta)
 	_tick_state_cycle(delta)
 	_tick_regen(delta)
@@ -169,10 +218,21 @@ func _start_inflate() -> void:
 	var bonus: float = _base_max_hp * inflated_hp_bonus_pct
 	max_hp = _base_max_hp + int(bonus)
 	hp = min(max_hp, hp + bonus)
+	# 2026-09-06, real sprite art added -- previously tweened _body_visual's
+	# scale 1.0->inflated_scale here as a placeholder-ColorRect stand-in for
+	# actually being bigger. Real, natively-sized art exists for both states
+	# now (deflated small fish vs. big spiky pufferfish), so no scaling at
+	# all — just an interval matching the same state_transition_duration
+	# timing the old tween used, then swap sprites/reveal the fin once she's
+	# actually INFLATED (user explicit: keep showing deflated art through the
+	# whole transition, don't pop early).
 	var tween := create_tween()
-	tween.tween_property(_body_visual, "scale", Vector2(inflated_scale, inflated_scale), state_transition_duration) \
-		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tween.tween_callback(func(): _state = State.INFLATED)
+	tween.tween_interval(state_transition_duration)
+	tween.tween_callback(func():
+		_state = State.INFLATED
+		_body_sprite.play("big")
+		_fin_sprite.visible = true
+	)
 
 func _start_deflate() -> void:
 	_state = State.DEFLATING
@@ -182,9 +242,12 @@ func _start_deflate() -> void:
 	hp = min(hp, max_hp)
 	_hide_lantern()
 	var tween := create_tween()
-	tween.tween_property(_body_visual, "scale", Vector2.ONE, state_transition_duration) \
-		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tween.tween_callback(func(): _state = State.DEFLATED)
+	tween.tween_interval(state_transition_duration)
+	tween.tween_callback(func():
+		_state = State.DEFLATED
+		_body_sprite.play("deflated")
+		_fin_sprite.visible = false
+	)
 
 # %-based regen, deliberately separate from base_enemy.gd's own flat
 # hp_regen field (stays 0, unused) -- needs to read max_hp fresh each frame
@@ -236,31 +299,40 @@ func is_lantern_vulnerable() -> bool:
 func _show_lantern() -> void:
 	_lantern_revealed = true
 	_lantern_reveal_timer = lantern_reveal_duration
+	# 2026-09-06, user explicit: "the 2 sprites of the inflated version. just
+	# use copy 6. copy 7 is the lantern show. use copy 7 when doing the
+	# lantern show thing" -- body swaps to the dedicated "lantern" pose
+	# (copy 7) for the reveal window instead of copy 6/7 alternating as a
+	# generic "big" idle loop.
+	_body_sprite.play("lantern")
 	# Same is_instance_valid() guards as _hide_lantern() below, for the same
 	# reason -- only ever reached via _tick_lantern_reveal(), which already
 	# checks _lantern_destroyed first, so this is defensive/symmetric rather
 	# than fixing a currently-reachable crash.
 	if is_instance_valid(_lantern_hurtbox):
 		_lantern_hurtbox.monitoring = true
-	if is_instance_valid(_lantern_bulb):
-		_lantern_bulb.visible = true
 	if is_instance_valid(_lantern_glow):
 		_lantern_glow.visible = true
 		_lantern_glow.modulate.a = 1.0
 
 func _hide_lantern() -> void:
 	_lantern_revealed = false
+	# Reverts the "lantern" pose (copy 7) _show_lantern() swapped to, back
+	# to the normal "big" idle (copy 6). Harmless when called from
+	# _start_deflate() too (before the body's even shown "lantern" this
+	# cycle, or right as she's deflating) -- the deflate transition's own
+	# tween_callback overwrites this to "deflated" a moment later regardless.
+	if is_instance_valid(_body_sprite):
+		_body_sprite.play("big")
 	# 2026-08-23 fix ("Invalid assignment of property or key 'monitoring'...
 	# on a base object of type 'previously freed'") -- this line was missing
-	# the same is_instance_valid() guard _lantern_bulb/_lantern_glow already
-	# had right below it. _hide_lantern() is called unconditionally from
+	# the same is_instance_valid() guard _lantern_glow already had right
+	# below it. _hide_lantern() is called unconditionally from
 	# _start_deflate() every single deflate cycle, not just from
 	# on_lantern_destroyed() -- once the lantern's actually been destroyed
 	# and queue_free()'d, the very next deflate hit this stale reference.
 	if is_instance_valid(_lantern_hurtbox):
 		_lantern_hurtbox.monitoring = false
-	if is_instance_valid(_lantern_bulb):
-		_lantern_bulb.visible = false
 	if is_instance_valid(_lantern_glow):
 		_lantern_glow.visible = false
 
@@ -289,9 +361,36 @@ func _tick_pulsing_shock(delta: float) -> void:
 	if _pulsing_shock_timer > 0.0:
 		return
 	_pulsing_shock_timer = pulsing_shock_interval
+	_spawn_pulsing_shock_visual()
 	for body in _pulsing_shock_zone.get_overlapping_bodies():
 		if body.is_in_group("player"):
 			_shock_player(body, pulsing_shock_damage)
+
+# 2026-09-06, user explicit: "for the voltangler deflated pulsing electric
+# shock. show color rect or radius glow when doing the pulse" -- previously
+# fired with zero visual feedback at all. Same radial-fade-and-free
+# technique spark_jelly.gd's own _spawn_pulse_visual() already uses for its
+# near-identical AOE pulse, for consistency -- a ring scaled to the actual
+# PulsingShockZone radius (read from its own CollisionShape2D rather than a
+# hardcoded number, so it can't drift out of sync if that shape's ever
+# retuned), fanning out and fading regardless of whether Elana's actually
+# in range this cycle (a hazard telegraph, not a hit-confirm).
+func _spawn_pulsing_shock_visual() -> void:
+	var shape: CircleShape2D = _pulsing_shock_zone.get_node("CollisionShape2D").shape
+	var radius: float = shape.radius
+	var poly = Polygon2D.new()
+	poly.color = Color(1.0, 0.95, 0.3, 0.35)
+	var pts := PackedVector2Array()
+	for i in 32:
+		var a = (float(i) / 32.0) * TAU
+		pts.append(Vector2(cos(a), sin(a)) * radius)
+	poly.polygon = pts
+	poly.global_position = global_position
+	poly.z_index = 3
+	get_parent().add_child(poly)
+	var tween = get_tree().create_tween()
+	tween.tween_property(poly, "modulate:a", 0.0, 0.4)
+	tween.tween_callback(poly.queue_free)
 
 func _shock_player(player: Node, damage: int) -> void:
 	if player.has_method("take_damage"):

@@ -368,11 +368,18 @@ var cobblecroak_defeated: bool = false
 # taller jump now instead of a barely-felt 15%.
 const COBBLECROAK_JUMP_MULT_BONUS: float = 0.5
 # Single source of truth for how long Elana's "shocked" status (elana.gd's
-# apply_shock() — input blocked, momentum NOT zeroed, unlike stun/freeze)
-# lasts, shared by every electric source instead of each keeping its own
-# separate copy of the same number: Elemander's Electric Storm bolts
-# (elemander.gd) and electrified water (terrain_hazards.gd) both read this.
+# apply_shock() — input blocked, momentum zeroed once on impact, gravity
+# resumes normally after) lasts, shared by every electric source instead of
+# each keeping its own separate copy of the same number: Elemander's
+# Electric Storm bolts (elemander.gd) and electrified water
+# (terrain_hazards.gd) both read this.
 const SHOCK_STUN_DURATION: float = 0.7
+# 2026-09-06, user explicit: "lets have 2 types of shock. shock and Strong
+# shock. spark fly applies strong shock" -- same apply_shock() effect
+# (elana.gd doesn't distinguish "strength" internally, there's no separate
+# flag/tint for this), just a longer stun window. Spark Jelly's pulse reads
+# this one instead of SHOCK_STUN_DURATION above.
+const STRONG_SHOCK_STUN_DURATION: float = 1.5
 # Different from SHOCK_STUN_DURATION above -- that one is Elana GETTING
 # shocked by enemy attacks; this is enemies getting shocked BY Elana's own
 # elec damage (hit_handler.gd's on_elemental_hit()). 2026-08-25, user

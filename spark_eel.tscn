@@ -1,13 +1,91 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://jjx55agqtyr3"]
 
-[ext_resource type="PackedScene" path="res://flying_enemy.tscn" id="1_flying"]
-[ext_resource type="Script" path="res://spark_eel.gd" id="2_spark_eel"]
+[ext_resource type="PackedScene" uid="uid://tl02knkp8306" path="res://flying_enemy.tscn" id="1_flying"]
+[ext_resource type="Script" uid="uid://cpjmbnjm3imei" path="res://spark_eel.gd" id="2_spark_eel"]
+[ext_resource type="Texture2D" uid="uid://c7ugu8yxladl7" path="res://sparkEel1.png" id="3_eel1"]
+[ext_resource type="Texture2D" uid="uid://cgo7uwlp1l2sr" path="res://sparkEel2.png" id="4_eel2"]
+[ext_resource type="Texture2D" uid="uid://cdyewogybl0cs" path="res://sparkEel3.png" id="5_eel3"]
+[ext_resource type="Texture2D" uid="uid://6i2caclxqdtl" path="res://sparkEel4.png" id="6_eel4"]
 
-[node name="SparkEel" instance=ExtResource("1_flying")]
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_eel_body"]
+size = Vector2(64, 16)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_eel_hurtbox"]
+size = Vector2(64, 16)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_eel_aggro"]
+size = Vector2(100, 100)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_eel_attack"]
+size = Vector2(16, 16)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_spark_eel"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("3_eel1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_eel2")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 1.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("3_eel1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_eel2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("5_eel3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("6_eel4")
+}],
+"loop": true,
+"name": &"walk",
+"speed": 8.0
+}]
+
+[node name="SparkEel" unique_id=1164016541 instance=ExtResource("1_flying")]
 script = ExtResource("2_spark_eel")
+out_of_water_tick_damage = 4
+out_of_water_tick_interval = 1.0
 max_hp = 28
-defense = 5
-attack_damage = 10
 xp_reward = 68
-modulate = Color(0.85, 0.85, 0.3, 1)
+defense = 5
 elec_resist = 0.0
+
+[node name="CollisionShape2D" parent="." index="0" unique_id=1727898149]
+shape = SubResource("RectangleShape2D_eel_body")
+
+[node name="CollisionShape2D" parent="Hurtbox" parent_id_path=PackedInt32Array(1153438017) index="0" unique_id=147929415]
+position = Vector2(0, 0)
+shape = SubResource("RectangleShape2D_eel_hurtbox")
+
+[node name="CollisionShape2D" parent="AggroZone" parent_id_path=PackedInt32Array(1077512632) index="0" unique_id=1848180697]
+shape = SubResource("RectangleShape2D_eel_aggro")
+
+; 2026-09-06, real bug found while wiring in the stop-distance fix (user:
+; "the eel just aligns its center to elana. but the attack zone is at one
+; end of the eel. so nothing happens") -- this (32,0) offset was set on the
+; CHILD CollisionShape2D here, but flying_enemy.gd's own direction-flip
+; logic (_update_zones()) only ever repositions the AttackZone node ITSELF
+; based on facing (reads $AttackZone.position.x once in _ready() as the
+; offset magnitude, then re-signs it every frame) -- with the offset on the
+; child instead, that read back 0, so the flip was a permanent no-op and
+; the hitbox stayed pinned to a fixed world side regardless of which way
+; the eel was actually facing/chasing. Moved up to AttackZone itself below.
+[node name="AttackZone" parent="." index="4" unique_id=696568212]
+position = Vector2(32, 0)
+
+[node name="CollisionShape2D" parent="AttackZone" parent_id_path=PackedInt32Array(696568212) index="0" unique_id=476977613]
+shape = SubResource("RectangleShape2D_eel_attack")
+
+[node name="AnimatedSprite2D" parent="." index="8" unique_id=1308536761]
+sprite_frames = SubResource("SpriteFrames_spark_eel")
+animation = &"walk"
+frame_progress = 0.42385656

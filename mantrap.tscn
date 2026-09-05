@@ -1,0 +1,65 @@
+[gd_scene format=3 uid="uid://duxoryh1vit8u"]
+
+[ext_resource type="PackedScene" uid="uid://blytlqon5vyl6" path="res://enemy.tscn" id="1_enemy"]
+[ext_resource type="Script" uid="uid://bq8n833vbs4bf" path="res://mantrap.gd" id="2_mantrap"]
+[ext_resource type="Texture2D" uid="uid://xhh356ynf0jy" path="res://mantrap-1.png" id="3_mantrap1"]
+[ext_resource type="Texture2D" uid="uid://crsg5d25g1rl7" path="res://mantrap-2.png" id="4_mantrap2"]
+[ext_resource type="Texture2D" uid="uid://bxykmjf5jyklu" path="res://mantrap-3.png" id="5_mantrap3"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_detect"]
+size = Vector2(32, 44)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_mantrap"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("3_mantrap1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_mantrap2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("5_mantrap3")
+}],
+"loop": false,
+"name": &"grab",
+"speed": 12.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("3_mantrap1")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}]
+
+[node name="Mantrap" unique_id=692209234 instance=ExtResource("1_enemy")]
+script = ExtResource("2_mantrap")
+grab_delay = 0.3
+stun_duration = 1.0
+hold_tick_damage = 5
+hold_tick_interval = 1.0
+hold_offset = Vector2(0, -8)
+max_hp = 70
+defense = 5
+attack_damage = 0
+
+[node name="AggroZone" parent="." index="3" unique_id=1077512632]
+position = Vector2(0, 0)
+
+[node name="CollisionShape2D" parent="AggroZone" index="0" unique_id=1848180697]
+position = Vector2(0, 6)
+shape = SubResource("RectangleShape2D_detect")
+
+[node name="AttackZone" parent="." index="4" unique_id=696568212]
+position = Vector2(0, 8)
+
+[node name="HPBar" parent="." index="6" unique_id=1201449712]
+position = Vector2(-16, -24)
+
+[node name="AnimatedSprite2D" parent="." index="8" unique_id=1381496649]
+position = Vector2(0, -24)
+sprite_frames = SubResource("SpriteFrames_mantrap")
+animation = &"idle"
+frame_progress = 0.0

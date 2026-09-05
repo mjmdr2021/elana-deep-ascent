@@ -123,7 +123,21 @@ func _ready() -> void:
 		return
 	add_to_group("enemies")
 	hp = max_hp
-	original_color = $ColorRect.color
+	# 2026-09-06, real bug found (Voltangler's placeholder ColorRect replaced
+	# with real sprite art, error: "Invalid access to property or key
+	# 'color' on a base object of type 'null instance'") -- this hardcoded
+	# $ColorRect unconditionally, assuming every enemy has one. Every other
+	# sprite-converted enemy so far (Mantrap, Spark Jelly/Eel/Flies) survived
+	# by coincidence -- flying_enemy.tscn/enemy.tscn both still keep a
+	# leftover ColorRect around, hidden but present. Voltangler's scene is
+	# the first to actually remove the node instead of leaving a dead
+	# placeholder, so this finally surfaced. Null-safe lookup instead,
+	# falling back to white (a sprite's natural resting modulate) for
+	# sprite-only enemies -- same ColorRect-or-sprite branch hit_handler.gd's
+	# own _set_flash_color() already uses, just applied to the capture side
+	# too now.
+	var visual_rect = get_node_or_null("ColorRect")
+	original_color = visual_rect.color if visual_rect else Color.WHITE
 	aggro_zone_offset = abs($AggroZone.position.x)
 	if _eye_glow:
 		_eye_glow_base_x = _eye_glow.position.x
@@ -292,7 +306,13 @@ func _tick_timers(delta: float) -> void:
 			is_stunned = false
 			if is_frozen:
 				is_frozen = false
-				$ColorRect.color = original_color
+				# Same ColorRect-or-sprite generalization as original_color's
+				# own capture above -- this used to hardcode $ColorRect too.
+				var visual_rect = get_node_or_null("ColorRect")
+				if visual_rect:
+					visual_rect.color = original_color
+				elif _sprite:
+					_sprite.modulate = original_color
 	if freeze_immune_timer > 0.0:
 		freeze_immune_timer -= delta
 	if slow_timer > 0.0:

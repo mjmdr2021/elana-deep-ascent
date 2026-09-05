@@ -19,6 +19,17 @@ const SURFACE_JUMP_TERRAIN_RANGE: float = 24.0
 var _in_water: bool = false
 var _was_in_water: bool = false
 var _at_water_surface: bool = false
+# Wall-jump-only water check, box-sampled across her actual collision extents
+# (13x23 -> ~6.5/11.5 half-extents) rather than the single origin point
+# _in_water uses. Confirmed via logged repro (2026-09-05): a wall-jump could
+# still fire with _in_water == false because her collision box was already
+# overlapping a water tile at a wall corner while her exact origin point sat
+# on the dry cell next to it. Kept separate from _in_water on purpose — that
+# narrow point check is relied on elsewhere (swim physics, oxygen, floor
+# snap) for exactly when she's centered over water, and widening it there
+# would change behavior nobody asked to change.
+const WALL_JUMP_WATER_CHECK_OFFSETS: Array[Vector2] = [Vector2(0, 0), Vector2(0, 11), Vector2(-6, 11), Vector2(6, 11), Vector2(-6, 0), Vector2(6, 0), Vector2(0, -11)]
+var _touching_water_wide: bool = false
 var _knockback_timer: float = 0.0
 var _knockback_ignores_gravity: bool = false
 var _last_valid_position: Vector2 = Vector2.ZERO
@@ -45,10 +56,14 @@ var _is_dead = false
 var is_stunned: bool = false
 var is_frozen: bool = false
 # Distinct from is_frozen — both block input the same way (is_stunned
-# gates that), but freeze also hard-stops her (velocity = Vector2.ZERO in
-# apply_freeze()) while shocked deliberately leaves velocity untouched, so
-# whatever momentum she had carries through the stun instead of snapping to
-# a dead stop. Cleared alongside is_frozen when stun_timer expires.
+# gates that) and both zero velocity, but freeze's zero is a per-frame
+# suspension for its whole duration (apply_freeze()'s dedicated
+# is_frozen early-return re-zeros velocity every physics frame, so she
+# hangs in place until it ends) while shock's is a single hit at the
+# instant apply_shock() lands — gravity resumes normally the very next
+# frame, so a mid-air shock still falls afterward, it just loses whatever
+# momentum it had first instead of carrying it through. Cleared alongside
+# is_frozen when stun_timer expires.
 var is_shocked: bool = false
 # Position pinned to _trap_anchor every physics frame (see the early-return
 # block near the top of _physics_process) — e.g. Ceiling Grabber's tongue
@@ -587,20 +602,22 @@ func apply_freeze(duration: float) -> void:
 	velocity = Vector2.ZERO
 	_update_status_tint()
 
-# Functionally identical to apply_stun() (is_stunned blocks direction/jump/
-# attack the same way, which naturally hard-stops horizontal movement too —
-# nothing needs to zero velocity.x separately) — is_shocked exists as its
-# own tracked flag purely so this reads as a distinct status from a plain
-# stun, and so it can be told apart from apply_freeze() specifically:
-# freeze also zeros velocity outright (both axes), stopping a fall dead in
-# midair, while shock leaves vertical velocity alone entirely — gravity
-# keeps pulling her down mid-fall same as if nothing happened, only
-# horizontal control is cut.
+# 2026-09-05, user explicit: shock now kills momentum too, not just input —
+# previously identical to apply_stun() (is_stunned blocking direction/jump/
+# attack naturally hard-stopped horizontal movement, but left vertical
+# velocity untouched so a fall/jump arc kept playing out uninterrupted).
+# Deliberately a ONE-TIME zero here, not apply_freeze()'s per-frame
+# suspension — this only kills whatever momentum she had at the instant of
+# the hit; gravity resumes normally the very next frame, so a mid-air shock
+# still falls afterward, it just loses its prior speed first instead of
+# smoothly carrying it through. Freeze remains the only status that
+# suspends her in place for its whole duration.
 func apply_shock(duration: float) -> void:
 	if is_dodging:
 		return
 	if _is_immune_to_status_element("elec"):
 		return
+	velocity = Vector2.ZERO
 	is_stunned = true
 	is_shocked = true
 	stun_timer = max(stun_timer, duration)
@@ -956,6 +973,11 @@ func _physics_process(delta):
 	# i.e. she's at the top edge, not submerged.
 	_in_water = WaterCheck.is_water(global_position, get_tree())
 	_at_water_surface = _in_water and not WaterCheck.is_water(global_position + Vector2(0, -16), get_tree())
+	_touching_water_wide = false
+	for _wjw_o in WALL_JUMP_WATER_CHECK_OFFSETS:
+		if WaterCheck.is_water(global_position + _wjw_o, get_tree()):
+			_touching_water_wide = true
+			break
 	# One-time splash dampening right on entry — the gradual move_toward()
 	# in the swim block below still needs a beat to bleed off a big fall
 	# velocity, which read as plunging straight to the bottom before this.
@@ -1179,11 +1201,16 @@ func _physics_process(delta):
 
 	var direction = 0.0 if (is_stunned or is_blocking or _casting_herb_skill or is_heavy_attack) else Input.get_axis("move_left", "move_right")
 
-	# not _in_water below — otherwise swimming up to any solid wall grants a
-	# full-strength wall-jump, bypassing the shorter, terrain-gated surface
-	# jump entirely (that elif comes after this block in the jump-buffer
-	# chain, so wall-sliding would always win first).
-	if GameData.wall_jump_enabled and is_on_wall() and not is_on_floor() and not _has_stair_corner() and not _in_water:
+	# not _touching_water_wide below (not the narrower _in_water) — otherwise
+	# swimming up to any solid wall grants a full-strength wall-jump,
+	# bypassing the shorter, terrain-gated surface jump entirely (that elif
+	# comes after this block in the jump-buffer chain, so wall-sliding would
+	# always win first). Confirmed via logged repro that _in_water's
+	# single-point origin check let this slip through right at wall corners
+	# where her collision box was already touching water but her exact
+	# origin point wasn't — _touching_water_wide box-samples her actual
+	# extents instead.
+	if GameData.wall_jump_enabled and is_on_wall() and not is_on_floor() and not _has_stair_corner() and not _touching_water_wide:
 		var wall_normal = get_wall_normal()
 		if not is_wall_sliding:
 			# Not yet stuck — the auto-stick window (right after a wall jump)
@@ -1516,7 +1543,16 @@ func _update_elec_redraw() -> void:
 
 func _handle_attack_input(delta: float) -> void:
 	var transforming = GameData.transform_delay_timer > 0.0
-	if is_stunned or is_blocking:
+	# 2026-09-05, real bug found (user: "why does somtimes i cant attack
+	# whn capturd?"): apply_trap() always sets is_stunned=true alongside
+	# is_trapped=true (that's how it locks movement), but this gate never
+	# carved out an exception for is_trapped -- it silently blocked
+	# starting any NEW attack for the entire time she was trapped,
+	# directly contradicting apply_trap()'s own documented intent
+	# ("attacking is untouched... escaping a trap by fighting back is the
+	# whole point"). Affects every is_trapped-based enemy (Ceiling Grabber,
+	# Mantrap), not just one.
+	if (is_stunned and not is_trapped) or is_blocking:
 		return
 	# Wall-jumping (the same commitment window _update_facing_from_mouse()
 	# already locks facing during) locks out attacking entirely, except

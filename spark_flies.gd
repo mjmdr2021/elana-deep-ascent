@@ -54,4 +54,15 @@ func _move(_delta: float) -> void:
 
 func _on_zap_touch(body: Node) -> void:
 	if body.is_in_group("player"):
-		body.take_damage(attack_damage, false, self)
+		# 2026-09-06, real bug found while wiring in Strong Shock (user:
+		# "its spark_flies" -- the actual enemy meant by "spark fly", a
+		# stationary contact-hazard fly, distinct from Spark Jelly's pulse):
+		# this zap dealt PLAIN damage (is_elemental=false, no element),
+		# skipping GameData.get_elemental_resist_for("elec") and the elec
+		# herb's immunity check entirely despite being a literal electric
+		# zap. Every other elec source in the game passes true/"elec" here.
+		body.take_damage(attack_damage, true, self, "elec")
+		# User explicit: "spark fly applies strong shock" -- same call
+		# spark_jelly.gd's _release_pulse() makes.
+		if body.has_method("apply_shock"):
+			body.apply_shock(GameData.STRONG_SHOCK_STUN_DURATION)

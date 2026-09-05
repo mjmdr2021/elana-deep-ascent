@@ -1,14 +1,67 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://dniiay6y7wmk4"]
 
-[ext_resource type="PackedScene" path="res://flying_enemy.tscn" id="1_flying"]
-[ext_resource type="Script" path="res://spark_jelly.gd" id="2_spark_jelly"]
+[ext_resource type="PackedScene" uid="uid://tl02knkp8306" path="res://flying_enemy.tscn" id="1_flying"]
+[ext_resource type="Script" uid="uid://bxelq551p58b2" path="res://spark_jelly.gd" id="2_spark_jelly"]
+[ext_resource type="Texture2D" uid="uid://dpin1rbywp0wf" path="res://sparkJelly1.png" id="3_jelly1"]
+[ext_resource type="Texture2D" uid="uid://dulfs3w0cwaw0" path="res://sparkJelly2.png" id="4_jelly2"]
+[ext_resource type="Texture2D" uid="uid://byl6bb6mk4iwf" path="res://sparkJelly3.png" id="5_jelly3"]
+[ext_resource type="Texture2D" uid="uid://cykb81c6l6v2m" path="res://sparkJelly4.png" id="6_jelly4"]
+[ext_resource type="Texture2D" uid="uid://dru0d0cevj17f" path="res://sparkJelly5.png" id="7_jelly5"]
+[ext_resource type="Texture2D" uid="uid://ub7jxum45hdw" path="res://sparkJelly6.png" id="8_jelly6"]
 
-[node name="SparkJelly" instance=ExtResource("1_flying")]
+[sub_resource type="SpriteFrames" id="SpriteFrames_spark_jelly"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("7_jelly5")
+}],
+"loop": true,
+"name": &"attack",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("6_jelly4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("5_jelly3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_jelly2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_jelly1")
+}],
+"loop": true,
+"name": &"death",
+"speed": 8.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("8_jelly6")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}]
+
+[node name="SparkJelly" unique_id=1933308643 instance=ExtResource("1_flying")]
 script = ExtResource("2_spark_jelly")
-max_hp = 30
-defense = 5
-attack_damage = 0
+pulse_interval = 3.0
+telegraph_time = 0.6
+pulse_radius = 50.0
+pulse_damage = 10
+chain_radius = 80.0
+out_of_water_tick_damage = 3
+out_of_water_tick_interval = 1.0
+bob_amplitude = 4.0
+bob_speed = 0.6
 speed = 2.0
 xp_reward = 66
-modulate = Color(1.0, 0.9, 0.3, 1)
+defense = 5
 elec_resist = 0.0
+attack_damage = 0
+
+[node name="AnimatedSprite2D" parent="." index="8" unique_id=1308536761]
+sprite_frames = SubResource("SpriteFrames_spark_jelly")
+frame_progress = 0.0
